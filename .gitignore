@@ -1,0 +1,15 @@
+# Terraform state (NUNCA subir al repo)
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+.terraform/
+.terraform.lock.hcl
+tfplan
+
+# Archivos generados por módulos
+**/*.zip
+
+# Checkov outputs
+checkov_out.json
+checkov_out.txt
+terraform/results.xml/
