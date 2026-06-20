@@ -1,0 +1,21 @@
+directory: terraform
+soft-fail: false
+skip-check:
+  - CKV_AWS_273    # IAM users vs SSO — proyecto académico, usuarios IAM intencionales
+  - CKV_AWS_274    # AdministratorAccess — rol de líder del equipo, intencional
+  - CKV_AWS_272    # Lambda code signing — código placeholder, se configura pre-producción
+  - CKV2_AWS_38    # Route53 DNSSEC — configuración a nivel de registrador de dominio
+  - CKV2_AWS_39    # Route53 DNS query logging — configuración a nivel de registrador
+  - CKV2_AWS_64    # KMS grants wildcard — comportamiento gestionado por AWS KMS
+  - CKV2_AWS_27    # Aurora query logging — gestionado via parameter group, no atributo de cluster
+  - CKV_AWS_144    # S3 cross-region replication — decisión arquitectónica, no requerido para proyecto académico
+  - CKV2_AWS_57    # Secrets rotation — rotation Lambda ARN gestionado post-deploy, no en IaC
+  - CKV2_AWS_47    # CloudFront WAF AMR Log4j — reglas AMR gestionadas en consola WAF
+  - CKV2_AWS_32    # CloudFront response headers policy — configurado post-deploy
+  - CKV_AWS_18     # S3 access logging — log bucket crearía dependencia circular; acceso auditado via CloudTrail
+  - CKV_AWS_382    # SG egress 0.0.0.0/0 all ports — Lambda necesita salida para llamar servicios AWS (S3, Secrets, SNS)
+  - CKV2_AWS_62    # S3 event notifications — no requerido para buckets de logs y frontend estático
+  - CKV2_AWS_5     # SG no adjunto a recurso — Checkov no detecta referencias cross-module en análisis estático
+  - CKV2_AWS_42    # CloudFront custom SSL — error intencional cubierto por CKV_AWS_174 (TLS v1.2)
+  - CKV2_AWS_31    # WAF2 logging — configurado post-deploy vía consola
+  - CKV2_AWS_61    # S3 lifecycle — solo requerido en buckets de logs, no en frontend estático
