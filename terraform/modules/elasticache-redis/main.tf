@@ -16,5 +16,9 @@ resource "aws_elasticache_cluster" "this" {
   subnet_group_name  = aws_elasticache_subnet_group.this.name
   security_group_ids = var.security_group_ids
 
+  # Backup automático diario con retención de 7 días — CKV_AWS_134
+  snapshot_retention_limit = 7
+  snapshot_window          = "03:00-04:00"
+
   tags = var.common_tags
 }
