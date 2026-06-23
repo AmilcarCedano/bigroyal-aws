@@ -47,6 +47,9 @@ resource "aws_rds_cluster" "this" {
 
   iam_database_authentication_enabled = true
 
+  # Protección contra borrado accidental del cluster — CKV_AWS_139
+  deletion_protection = true
+
   skip_final_snapshot = true
 
   tags = var.common_tags
