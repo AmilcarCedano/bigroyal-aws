@@ -27,7 +27,7 @@ resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.this.id
   cidr_block              = var.public_subnet_cidr
   availability_zone       = data.aws_availability_zones.available.names[0]
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = false
   tags = merge(var.common_tags, { Name = "${var.resource_prefix}-public-a", Tier = "public" })
 }
 
@@ -148,4 +148,45 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_route_table.private.id]
   tags = merge(var.common_tags, { Name = "${var.resource_prefix}-vpce-s3" })
+}
+
+resource "aws_iam_role" "flow_logs" {
+  name = "${var.resource_prefix}-vpc-flow-logs-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = var.common_tags
+}
+
+resource "aws_iam_role_policy" "flow_logs" {
+  name = "${var.resource_prefix}-vpc-flow-logs-policy"
+  role = aws_iam_role.flow_logs.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"]
+      Resource = "${aws_cloudwatch_log_group.flow_logs.arn}:*"
+    }]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "flow_logs" {
+  name              = "/aws/vpc/flow-logs/${var.resource_prefix}"
+  retention_in_days = 365
+  kms_key_id        = var.kms_key_arn
+  tags              = var.common_tags
+}
+
+resource "aws_flow_log" "this" {
+  vpc_id          = aws_vpc.this.id
+  traffic_type    = "ALL"
+  iam_role_arn    = aws_iam_role.flow_logs.arn
+  log_destination = aws_cloudwatch_log_group.flow_logs.arn
+  tags            = merge(var.common_tags, { Name = "${var.resource_prefix}-flow-log" })
 }

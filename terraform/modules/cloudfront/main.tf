@@ -61,6 +61,11 @@ resource "aws_cloudfront_distribution" "this" {
   price_class         = var.price_class
   web_acl_id          = var.web_acl_arn
 
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.logs.bucket_domain_name
+    prefix          = "cf-access-logs/"
+  }
 
   origin {
     domain_name              = var.origin_domain_name
@@ -114,12 +119,15 @@ resource "aws_cloudfront_distribution" "this" {
 
   restrictions {
     geo_restriction {
-      restriction_type = "none"
+      restriction_type  = "whitelist"
+      locations         = ["PE", "US", "CO", "MX", "CL", "AR"]
     }
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = var.acm_certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   tags = var.common_tags
