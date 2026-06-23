@@ -48,11 +48,6 @@ resource "aws_backup_plan" "aurora" {
   tags = var.common_tags
 }
 
-# Asociar el plan al cluster Aurora
-resource "aws_backup_selection" "aurora" {
-  name         = "${var.resource_prefix}-aurora-selection"
-  plan_id      = aws_backup_plan.aurora.id
-  iam_role_arn = aws_iam_role.backup.arn
-
-  resources = [var.aurora_cluster_arn]
-}
+# La asociación del plan al cluster (aws_backup_selection) vive en el módulo
+# aurora-postgresql, referenciando el ARN del cluster directamente. Esto permite
+# que Checkov (CKV2_AWS_8) resuelva el enlace recurso→backup en el grafo estático.

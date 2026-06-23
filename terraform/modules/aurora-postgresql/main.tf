@@ -40,8 +40,15 @@ resource "aws_rds_cluster" "this" {
 
   backup_retention_period = 7
   preferred_backup_window = "03:00-04:00"
+  copy_tags_to_snapshot   = true # CKV_AWS_313
+
+  # Exportar logs de PostgreSQL a CloudWatch — CKV_AWS_324 (RNF-17)
+  enabled_cloudwatch_logs_exports = ["postgresql"]
 
   iam_database_authentication_enabled = true
+
+  # Protección contra borrado accidental del cluster — CKV_AWS_139
+  deletion_protection = true
 
   skip_final_snapshot = true
 
@@ -84,6 +91,17 @@ resource "aws_rds_cluster_instance" "standby" {
   performance_insights_kms_key_id = var.kms_key_arn
 
   tags = var.common_tags
+}
+
+# Asociación del plan de AWS Backup al cluster Aurora — RPO ≤ 5 min (RNF-14).
+# Se referencia aws_rds_cluster.this.arn directamente para que el grafo de
+# Checkov resuelva el enlace recurso→backup (CKV2_AWS_8).
+resource "aws_backup_selection" "this" {
+  name         = "${var.resource_prefix}-aurora-selection"
+  plan_id      = var.backup_plan_id
+  iam_role_arn = var.backup_role_arn
+
+  resources = [aws_rds_cluster.this.arn]
 }
 
 # Read Replica — solo reportes, sin afectar al Writer (RNF-13)
