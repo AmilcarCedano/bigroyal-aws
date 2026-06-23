@@ -171,14 +171,14 @@ resource "aws_iam_role_policy" "flow_logs" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"]
-      Resource = "*"
+      Resource = "${aws_cloudwatch_log_group.flow_logs.arn}:*"
     }]
   })
 }
 
 resource "aws_cloudwatch_log_group" "flow_logs" {
   name              = "/aws/vpc/flow-logs/${var.resource_prefix}"
-  retention_in_days = 30
+  retention_in_days = 365
   kms_key_id        = var.kms_key_arn
   tags              = var.common_tags
 }
