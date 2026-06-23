@@ -172,6 +172,7 @@ module "api_gateway" {
   lambda_arn            = module.lambda_backend.lambda_arn
   cognito_user_pool_id  = module.cognito.user_pool_id
   cognito_app_client_id = module.cognito.app_client_id
+  kms_key_arn           = module.kms.key_arn
 }
 
 module "redis" {

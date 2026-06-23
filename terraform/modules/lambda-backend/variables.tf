@@ -12,8 +12,4 @@ variable "redis_endpoint"     { type = string }
 variable "sns_topic_arn"      { type = string }
 variable "subnet_ids"         { type = list(string) }
 variable "security_group_ids" { type = list(string) }
-variable "kms_key_arn"        { type = string }
-variable "kms_key_arn" {
-  type        = string
-  description = "ARN de la clave KMS para encriptar los recursos y variables de la Lambda"
-}
+variable "kms_key_arn"        { type = string } # ARN KMS para cifrar variables de entorno y DLQ de la Lambda
