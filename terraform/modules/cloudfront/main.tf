@@ -61,6 +61,11 @@ resource "aws_cloudfront_distribution" "this" {
   price_class         = var.price_class
   web_acl_id          = var.web_acl_arn
 
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.logs.bucket_domain_name
+    prefix          = "cf-access-logs/"
+  }
 
   origin {
     domain_name              = var.origin_domain_name
