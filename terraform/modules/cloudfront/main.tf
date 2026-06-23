@@ -119,7 +119,8 @@ resource "aws_cloudfront_distribution" "this" {
 
   restrictions {
     geo_restriction {
-      restriction_type = "none"
+      restriction_type  = "whitelist"
+      locations         = ["PE", "US", "CO", "MX", "CL", "AR"]
     }
   }
 
