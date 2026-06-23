@@ -46,9 +46,24 @@ resource "aws_iam_role_policy" "secrets_and_sns" {
         Effect   = "Allow"
         Action   = ["sns:Publish"]
         Resource = [var.sns_topic_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = [aws_sqs_queue.dlq.arn]
       }
     ]
   })
+}
+
+# Dead Letter Queue para invocaciones asíncronas fallidas (CKV_AWS_116)
+resource "aws_sqs_queue" "dlq" {
+  name                              = "${var.resource_prefix}-backend-dlq"
+  kms_master_key_id                 = var.kms_key_arn
+  kms_data_key_reuse_period_seconds = 300
+  message_retention_seconds         = 1209600 # 14 días
+
+  tags = var.common_tags
 }
 
 # Zip placeholder — cada integrante sube el código real al S3 o via CI
@@ -79,6 +94,11 @@ resource "aws_lambda_function" "this" {
   # Trazado distribuido con AWS X-Ray (CKV_AWS_50)
   tracing_config {
     mode = "Active"
+  }
+
+  # Cola de mensajes muertos para invocaciones asíncronas fallidas (CKV_AWS_116)
+  dead_letter_config {
+    target_arn = aws_sqs_queue.dlq.arn
   }
 
   environment {
