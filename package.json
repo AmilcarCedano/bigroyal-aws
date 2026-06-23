@@ -1,0 +1,19 @@
+{
+  "name": "bigroyal-aws",
+  "version": "1.0.0",
+  "description": "BigRoyal - Infraestructura como Código en AWS",
+  "scripts": {
+    "test": "jest --coverage"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/**/*.test.js"
+    ],
+    "coverageReporters": ["lcov", "text"]
+  }
+}
