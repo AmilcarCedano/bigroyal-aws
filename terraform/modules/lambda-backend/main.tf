@@ -24,6 +24,12 @@ resource "aws_iam_role_policy_attachment" "basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# Permite a la Lambda enviar trazas a X-Ray (CKV_AWS_50)
+resource "aws_iam_role_policy_attachment" "xray" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+}
+
 resource "aws_iam_role_policy" "secrets_and_sns" {
   name = "${var.resource_prefix}-lambda-policy"
   role = aws_iam_role.lambda.id
@@ -68,8 +74,12 @@ resource "aws_lambda_function" "this" {
   filename         = data.archive_file.placeholder.output_path
   source_code_hash = data.archive_file.placeholder.output_base64sha256
 
-  # AQUÍ AGREGAS LA CORRECCIÓN:
   kms_key_arn = var.kms_key_arn
+
+  # Trazado distribuido con AWS X-Ray (CKV_AWS_50)
+  tracing_config {
+    mode = "Active"
+  }
 
   environment {
     variables = {
