@@ -233,18 +233,22 @@ module "aurora" {
   kms_key_arn        = module.kms.key_arn
   subnet_ids         = module.vpc.private_subnet_ids
   security_group_ids = [module.vpc.db_security_group_id]
+
+  # AWS Backup: el aws_backup_selection vive en este módulo y referencia el
+  # cluster directamente; el plan y el rol provienen del módulo aws-backup.
+  backup_plan_id  = module.aws_backup.plan_id
+  backup_role_arn = module.aws_backup.role_arn
 }
 
 # AWS Backup: WAL continuo Aurora, RPO 5 min, retención 7 días (RNF-14)
 module "aws_backup" {
   source = "../../modules/aws-backup"
 
-  project_name      = var.project_name
-  env               = var.env
-  resource_prefix   = var.resource_prefix
-  common_tags       = local.common_tags
-  aurora_cluster_arn = module.aurora.cluster_arn
-  kms_key_arn       = module.kms.key_arn
+  project_name    = var.project_name
+  env             = var.env
+  resource_prefix = var.resource_prefix
+  common_tags     = local.common_tags
+  kms_key_arn     = module.kms.key_arn
 }
 
 # CloudWatch alarms + SNS alertas equipo técnico (RNF-17: <2 min, umbral 1% errores)

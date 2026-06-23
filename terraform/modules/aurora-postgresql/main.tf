@@ -86,6 +86,17 @@ resource "aws_rds_cluster_instance" "standby" {
   tags = var.common_tags
 }
 
+# Asociación del plan de AWS Backup al cluster Aurora — RPO ≤ 5 min (RNF-14).
+# Se referencia aws_rds_cluster.this.arn directamente para que el grafo de
+# Checkov resuelva el enlace recurso→backup (CKV2_AWS_8).
+resource "aws_backup_selection" "this" {
+  name         = "${var.resource_prefix}-aurora-selection"
+  plan_id      = var.backup_plan_id
+  iam_role_arn = var.backup_role_arn
+
+  resources = [aws_rds_cluster.this.arn]
+}
+
 # Read Replica — solo reportes, sin afectar al Writer (RNF-13)
 resource "aws_rds_cluster_instance" "reader" {
   identifier         = "${var.resource_prefix}-aurora-reader"

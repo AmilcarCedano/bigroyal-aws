@@ -11,3 +11,7 @@ variable "subnet_ids"          { type = list(string) }
 variable "security_group_ids"  { type = list(string) }
 variable "instance_class"      { type = string; default = "db.t3.medium" }
 variable "engine_version"      { type = string; default = "15.4" }
+
+# AWS Backup (provienen del módulo aws-backup)
+variable "backup_plan_id"      { type = string }
+variable "backup_role_arn"     { type = string }
