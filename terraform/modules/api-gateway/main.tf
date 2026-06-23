@@ -33,8 +33,11 @@ resource "aws_apigatewayv2_integration" "lambda" {
   payload_format_version = "2.0"
 }
 
-# ── FIX CKV_AWS_309: ruta pública con authorization_type explícito = NONE ──
+# Ruta pública intencional (health checks / recursos sin auth). El resto del API
+# va con JWT (ver route.protected). Se suprime CKV_AWS_309 solo en este recurso
+# para no desproteger las rutas autenticadas con un skip global.
 resource "aws_apigatewayv2_route" "public" {
+  #checkov:skip=CKV_AWS_309:Ruta pública por diseño; las rutas con datos van con authorizer JWT
   api_id             = aws_apigatewayv2_api.this.id
   route_key          = "ANY /public/{proxy+}"
   target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
