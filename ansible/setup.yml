@@ -1,0 +1,86 @@
+---
+- name: Preparar entorno de despliegue BigRoyal AWS
+  hosts: localhost
+  connection: local
+  vars:
+    entorno: "{{ env | default('DEV') }}"
+
+  tasks:
+
+    # ── Validaciones comunes ──────────────────────────────────────────────────
+
+    - name: Verificar instalación de Terraform
+      command: terraform --version
+      register: terraform_version
+      changed_when: false
+
+    - name: Mostrar versión de Terraform
+      debug:
+        msg: "{{ terraform_version.stdout_lines[0] }}"
+
+    - name: Verificar instalación de AWS CLI
+      command: aws --version
+      register: aws_version
+      changed_when: false
+
+    - name: Mostrar versión de AWS CLI
+      debug:
+        msg: "{{ aws_version.stdout }}"
+
+    # ── Entorno DEV ───────────────────────────────────────────────────────────
+
+    - name: "[DEV] Crear archivo de variables para desarrollo"
+      when: entorno == "DEV"
+      copy:
+        dest: "{{ playbook_dir }}/../terraform/envs/dev/terraform.tfvars"
+        content: |
+          project_name    = "bigroyal"
+          env             = "dev"
+          resource_prefix = "bigroyal-dev"
+          aws_region      = "us-east-1"
+        force: false
+
+    - name: "[DEV] Confirmar entorno listo"
+      when: entorno == "DEV"
+      debug:
+        msg: "Entorno DEV configurado. Puedes correr: terraform plan"
+
+    # ── Entorno PROD ──────────────────────────────────────────────────────────
+
+    - name: "[PROD] Validar credenciales AWS activas"
+      when: entorno == "PROD"
+      command: aws sts get-caller-identity
+      register: identity
+      changed_when: false
+
+    - name: "[PROD] Mostrar cuenta AWS conectada"
+      when: entorno == "PROD"
+      debug:
+        msg: "{{ identity.stdout }}"
+
+    - name: "[PROD] Verificar región configurada"
+      when: entorno == "PROD"
+      command: aws configure get region
+      register: region
+      changed_when: false
+
+    - name: "[PROD] Mostrar región"
+      when: entorno == "PROD"
+      debug:
+        msg: "Región AWS: {{ region.stdout }}"
+
+    - name: "[PROD] Crear archivo de variables para producción"
+      when: entorno == "PROD"
+      copy:
+        dest: "{{ playbook_dir }}/../terraform/envs/dev/terraform.tfvars"
+        content: |
+          project_name    = "bigroyal"
+          env             = "prod"
+          resource_prefix = "bigroyal-prod"
+          aws_region      = "us-east-1"
+        force: false
+
+    - name: "[PROD] Confirmar entorno listo"
+      when: entorno == "PROD"
+      debug:
+        msg: "Entorno PROD validado. Puedes correr: terraform apply"
