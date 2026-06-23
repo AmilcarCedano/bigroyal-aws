@@ -6,3 +6,4 @@ variable "common_tags"           { type = map(string) }
 variable "lambda_arn"            { type = string }
 variable "cognito_user_pool_id"  { type = string }
 variable "cognito_app_client_id" { type = string }
+variable "kms_key_arn"           { type = string } # cifra el log group de access logging
