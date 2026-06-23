@@ -149,3 +149,44 @@ resource "aws_vpc_endpoint" "s3" {
   route_table_ids   = [aws_route_table.private.id]
   tags = merge(var.common_tags, { Name = "${var.resource_prefix}-vpce-s3" })
 }
+
+resource "aws_iam_role" "flow_logs" {
+  name = "${var.resource_prefix}-vpc-flow-logs-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = var.common_tags
+}
+
+resource "aws_iam_role_policy" "flow_logs" {
+  name = "${var.resource_prefix}-vpc-flow-logs-policy"
+  role = aws_iam_role.flow_logs.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "flow_logs" {
+  name              = "/aws/vpc/flow-logs/${var.resource_prefix}"
+  retention_in_days = 30
+  kms_key_id        = var.kms_key_arn
+  tags              = var.common_tags
+}
+
+resource "aws_flow_log" "this" {
+  vpc_id          = aws_vpc.this.id
+  traffic_type    = "ALL"
+  iam_role_arn    = aws_iam_role.flow_logs.arn
+  log_destination = aws_cloudwatch_log_group.flow_logs.arn
+  tags            = merge(var.common_tags, { Name = "${var.resource_prefix}-flow-log" })
+}
