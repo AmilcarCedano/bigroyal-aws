@@ -64,6 +64,19 @@ resource "aws_s3_bucket_policy" "trail" {
         Condition = {
           StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
         }
+      },
+      {
+        Sid       = "DenyHTTP"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.trail.arn,
+          "${aws_s3_bucket.trail.arn}/*"
+        ]
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+        }
       }
     ]
   })
@@ -82,6 +95,7 @@ resource "aws_cloudtrail" "main" {
   s3_bucket_name                = aws_s3_bucket.trail.id
   include_global_service_events = true
   is_multi_region_trail         = true
+  enable_logging                = true
   enable_log_file_validation    = true
   kms_key_id                    = var.kms_key_arn
   sns_topic_name                = aws_sns_topic.trail_alerts.arn
