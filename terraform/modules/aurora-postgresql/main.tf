@@ -40,6 +40,7 @@ resource "aws_rds_cluster" "this" {
 
   backup_retention_period = 7
   preferred_backup_window = "03:00-04:00"
+  copy_tags_to_snapshot   = true # CKV_AWS_313
 
   iam_database_authentication_enabled = true
 
