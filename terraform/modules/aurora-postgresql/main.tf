@@ -42,6 +42,9 @@ resource "aws_rds_cluster" "this" {
   preferred_backup_window = "03:00-04:00"
   copy_tags_to_snapshot   = true # CKV_AWS_313
 
+  # Exportar logs de PostgreSQL a CloudWatch — CKV_AWS_324 (RNF-17)
+  enabled_cloudwatch_logs_exports = ["postgresql"]
+
   iam_database_authentication_enabled = true
 
   skip_final_snapshot = true
