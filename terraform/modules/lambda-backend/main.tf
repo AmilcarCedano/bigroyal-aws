@@ -68,6 +68,9 @@ resource "aws_lambda_function" "this" {
   filename         = data.archive_file.placeholder.output_path
   source_code_hash = data.archive_file.placeholder.output_base64sha256
 
+  # AQUÍ AGREGAS LA CORRECCIÓN:
+  kms_key_arn = var.kms_key_arn
+
   environment {
     variables = {
       NODE_ENV       = var.env
