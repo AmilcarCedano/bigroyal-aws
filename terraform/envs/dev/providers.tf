@@ -37,3 +37,31 @@ provider "aws" {
     }
   }
 }
+
+# Alias us-east-1 — obligatorio para Route53 DNSSEC y DNS query logging
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.env
+      ManagedBy   = "terraform"
+    }
+  }
+}
+
+# Alias us-west-2 — para el bucket réplica de S3 CRR
+provider "aws" {
+  alias  = "replica"
+  region = "us-west-2"
+
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.env
+      ManagedBy   = "terraform"
+    }
+  }
+}

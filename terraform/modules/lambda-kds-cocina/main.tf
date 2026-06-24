@@ -1,3 +1,27 @@
+# SG del KDS Cocina Lambda — CKV_AWS_382, CKV2_AWS_5
+resource "aws_security_group" "lambda" {
+  name        = "${var.resource_prefix}-kds-cocina-sg"
+  description = "SG Lambda KDS Cocina — egress solo hacia VPC"
+  vpc_id      = var.vpc_id
+
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "HTTPS hacia VPC endpoints"
+  }
+  egress {
+    from_port   = 6379
+    to_port     = 6379
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "Redis"
+  }
+
+  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-kds-cocina-sg" })
+}
+
 resource "aws_iam_role" "lambda" {
   name = "${var.resource_prefix}-kds-cocina-role"
 
@@ -18,7 +42,6 @@ resource "aws_iam_role_policy_attachment" "vpc" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
-# DLQ para mensajes fallidos del KDS
 resource "aws_sqs_queue" "kds_dlq" {
   name                      = "${var.resource_prefix}-kds-dlq"
   message_retention_seconds = 1209600
@@ -26,12 +49,34 @@ resource "aws_sqs_queue" "kds_dlq" {
   tags                      = var.common_tags
 }
 
+# Firma de código Lambda — CKV_AWS_272
+resource "aws_signer_signing_profile" "this" {
+  name_prefix = "bigroyal_kds_"
+  platform_id = "AWSLambda-SHA384-ECDSA"
+
+  signature_validity_period {
+    value = 5
+    type  = "YEARS"
+  }
+
+  tags = var.common_tags
+}
+
+resource "aws_lambda_code_signing_config" "this" {
+  allowed_publishers {
+    signing_profile_version_arns = [aws_signer_signing_profile.this.version_arn]
+  }
+  policies {
+    untrusted_artifact_on_deployment = "Warn"
+  }
+}
+
 data "archive_file" "placeholder" {
   type        = "zip"
   output_path = "${path.module}/kds-placeholder.zip"
 
   source {
-    content  = "exports.handler = async (event) => { console.log('KDS Cocina:', JSON.stringify(event)); return { statusCode: 200 }; };"
+    content  = "exports.handler = async (event) => { return { statusCode: 200 }; };"
     filename = "index.js"
   }
 }
@@ -45,6 +90,7 @@ resource "aws_lambda_function" "kds_cocina" {
   memory_size                    = 256
   reserved_concurrent_executions = 50
   kms_key_arn                    = var.kms_key_arn
+  code_signing_config_arn        = aws_lambda_code_signing_config.this.arn
 
   filename         = data.archive_file.placeholder.output_path
   source_code_hash = data.archive_file.placeholder.output_base64sha256
@@ -56,17 +102,13 @@ resource "aws_lambda_function" "kds_cocina" {
     }
   }
 
-  tracing_config {
-    mode = "Active"
-  }
+  tracing_config { mode = "Active" }
 
-  dead_letter_config {
-    target_arn = aws_sqs_queue.kds_dlq.arn
-  }
+  dead_letter_config { target_arn = aws_sqs_queue.kds_dlq.arn }
 
   vpc_config {
     subnet_ids         = var.subnet_ids
-    security_group_ids = var.security_group_ids
+    security_group_ids = [aws_security_group.lambda.id]
   }
 
   tags = var.common_tags

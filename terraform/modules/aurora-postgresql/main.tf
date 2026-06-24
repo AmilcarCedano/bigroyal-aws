@@ -1,3 +1,20 @@
+# SG de Aurora — ingress solo desde VPC CIDR — CKV2_AWS_5
+resource "aws_security_group" "db" {
+  name        = "${var.resource_prefix}-db-sg"
+  description = "SG Aurora PostgreSQL — ingress solo desde VPC CIDR"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "PostgreSQL desde Lambdas en VPC"
+  }
+
+  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-db-sg" })
+}
+
 resource "aws_db_subnet_group" "this" {
   name       = "${var.resource_prefix}-db-subnet-group"
   subnet_ids = var.subnet_ids
@@ -24,16 +41,34 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
+# Parameter group con query logging habilitado — CKV2_AWS_27
+resource "aws_rds_cluster_parameter_group" "this" {
+  name        = "${var.resource_prefix}-aurora-pg"
+  family      = "aurora-postgresql15"
+  description = "Parameter group BigRoyal con query logging"
+  tags        = var.common_tags
+
+  parameter {
+    name  = "log_statement"
+    value = "all"
+  }
+  parameter {
+    name  = "log_min_duration_statement"
+    value = "1000"
+  }
+}
+
 # Cluster Aurora PostgreSQL Multi-AZ (cifrado KMS — RNF-15)
 resource "aws_rds_cluster" "this" {
-  cluster_identifier      = "${var.resource_prefix}-aurora-cluster"
-  engine                  = "aurora-postgresql"
-  engine_version          = var.engine_version
-  database_name           = var.db_name
-  master_username         = var.db_master_username
-  master_password         = var.db_master_password
-  db_subnet_group_name    = aws_db_subnet_group.this.name
-  vpc_security_group_ids  = var.security_group_ids
+  cluster_identifier            = "${var.resource_prefix}-aurora-cluster"
+  engine                        = "aurora-postgresql"
+  engine_version                = var.engine_version
+  database_name                 = var.db_name
+  master_username               = var.db_master_username
+  master_password               = var.db_master_password
+  db_subnet_group_name          = aws_db_subnet_group.this.name
+  vpc_security_group_ids        = [aws_security_group.db.id]
+  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.this.name
 
   storage_encrypted = true
   kms_key_id        = var.kms_key_arn
