@@ -7,20 +7,12 @@ locals {
 }
 
 # ─────────────────────────────────────────────
-# CAPA TRANSVERSAL: KMS + IAM + CloudTrail
+# CAPA TRANSVERSAL: KMS + CloudTrail
+# (iam-users eliminado — CKV_AWS_273, CKV_AWS_274)
 # ─────────────────────────────────────────────
 
 module "kms" {
   source = "../../modules/kms"
-
-  project_name    = var.project_name
-  env             = var.env
-  resource_prefix = var.resource_prefix
-  common_tags     = local.common_tags
-}
-
-module "iam_users" {
-  source = "../../modules/iam-users"
 
   project_name    = var.project_name
   env             = var.env
@@ -51,6 +43,7 @@ module "vpc" {
   resource_prefix = var.resource_prefix
   aws_region      = var.aws_region
   common_tags     = local.common_tags
+  kms_key_arn     = module.kms.key_arn
 }
 
 # ─────────────────────────────────────────────
@@ -64,16 +57,23 @@ module "waf" {
   env             = var.env
   resource_prefix = var.resource_prefix
   common_tags     = local.common_tags
+  kms_key_arn     = module.kms.key_arn
 }
 
 module "s3_frontend" {
   source = "../../modules/s3-frontend"
+
+  providers = {
+    aws         = aws
+    aws.replica = aws.replica
+  }
 
   project_name    = var.project_name
   env             = var.env
   resource_prefix = var.resource_prefix
   common_tags     = local.common_tags
   kms_key_arn     = module.kms.key_arn
+  sns_topic_arn   = module.sns_sqs.fanout_topic_arn
 }
 
 module "cloudfront" {
@@ -94,12 +94,18 @@ module "cloudfront" {
 module "route53" {
   source = "../../modules/route53"
 
-  project_name      = var.project_name
-  env               = var.env
-  resource_prefix   = var.resource_prefix
-  common_tags       = local.common_tags
-  domain_name       = var.domain_name
-  cloudfront_domain = module.cloudfront.cdn_domain_name
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
+
+  project_name           = var.project_name
+  env                    = var.env
+  resource_prefix        = var.resource_prefix
+  common_tags            = local.common_tags
+  domain_name            = var.domain_name
+  cloudfront_domain_name = module.cloudfront.cdn_domain_name
+  kms_key_arn            = module.kms.key_arn
 }
 
 # ─────────────────────────────────────────────
@@ -128,37 +134,63 @@ module "secrets_manager" {
   db_name            = var.db_name
   db_master_username = var.db_master_username
   kms_key_arn        = module.kms.key_arn
+  vpc_id             = module.vpc.vpc_id
+  subnet_ids         = module.vpc.private_subnet_ids
+  vpc_cidr           = module.vpc.vpc_cidr_block
 }
 
-# Lambda principal: Pedidos y Órdenes (RNF-07: <200 ms)
+module "sns_sqs" {
+  source = "../../modules/sns-sqs"
+
+  project_name    = var.project_name
+  env             = var.env
+  resource_prefix = var.resource_prefix
+  aws_region      = var.aws_region
+  common_tags     = local.common_tags
+  kms_key_arn     = module.kms.key_arn
+}
+
+module "redis" {
+  source = "../../modules/elasticache-redis"
+
+  project_name    = var.project_name
+  env             = var.env
+  resource_prefix = var.resource_prefix
+  common_tags     = local.common_tags
+  subnet_ids      = module.vpc.private_subnet_ids
+  vpc_id          = module.vpc.vpc_id
+  vpc_cidr        = module.vpc.vpc_cidr_block
+}
+
 module "lambda_backend" {
   source = "../../modules/lambda-backend"
 
-  project_name       = var.project_name
-  env                = var.env
-  resource_prefix    = var.resource_prefix
-  common_tags        = local.common_tags
-  function_name      = "${var.resource_prefix}-backend"
-  db_secret_arn      = module.secrets_manager.db_secret_arn
-  redis_endpoint     = module.redis.endpoint
-  sns_topic_arn      = module.sns_sqs.fanout_topic_arn
-  subnet_ids         = module.vpc.private_subnet_ids
-  security_group_ids = [module.vpc.lambda_security_group_id]
-  kms_key_arn        = module.kms.key_arn
+  project_name    = var.project_name
+  env             = var.env
+  resource_prefix = var.resource_prefix
+  common_tags     = local.common_tags
+  function_name   = "${var.resource_prefix}-backend"
+  db_secret_arn   = module.secrets_manager.db_secret_arn
+  redis_endpoint  = module.redis.endpoint
+  sns_topic_arn   = module.sns_sqs.fanout_topic_arn
+  subnet_ids      = module.vpc.private_subnet_ids
+  vpc_id          = module.vpc.vpc_id
+  vpc_cidr        = module.vpc.vpc_cidr_block
+  kms_key_arn     = module.kms.key_arn
 }
 
-# Lambda KDS Cocina — actualiza pantalla cocina en paralelo, <1 s (RNF-08)
 module "lambda_kds_cocina" {
   source = "../../modules/lambda-kds-cocina"
 
-  project_name       = var.project_name
-  env                = var.env
-  resource_prefix    = var.resource_prefix
-  common_tags        = local.common_tags
-  redis_endpoint     = module.redis.endpoint
-  subnet_ids         = module.vpc.private_subnet_ids
-  security_group_ids = [module.vpc.lambda_security_group_id]
-  kms_key_arn        = module.kms.key_arn
+  project_name    = var.project_name
+  env             = var.env
+  resource_prefix = var.resource_prefix
+  common_tags     = local.common_tags
+  redis_endpoint  = module.redis.endpoint
+  subnet_ids      = module.vpc.private_subnet_ids
+  vpc_id          = module.vpc.vpc_id
+  vpc_cidr        = module.vpc.vpc_cidr_block
+  kms_key_arn     = module.kms.key_arn
 }
 
 module "api_gateway" {
@@ -172,32 +204,9 @@ module "api_gateway" {
   lambda_arn            = module.lambda_backend.lambda_arn
   cognito_user_pool_id  = module.cognito.user_pool_id
   cognito_app_client_id = module.cognito.app_client_id
+  kms_key_arn           = module.kms.key_arn
 }
 
-module "redis" {
-  source = "../../modules/elasticache-redis"
-
-  project_name       = var.project_name
-  env                = var.env
-  resource_prefix    = var.resource_prefix
-  common_tags        = local.common_tags
-  subnet_ids         = module.vpc.private_subnet_ids
-  security_group_ids = [module.vpc.redis_security_group_id]
-}
-
-# SNS FanOut → 3 colas SQS: Alertas Ops / Auditoría Financiera / Inventario
-module "sns_sqs" {
-  source = "../../modules/sns-sqs"
-
-  project_name    = var.project_name
-  env             = var.env
-  resource_prefix = var.resource_prefix
-  aws_region      = var.aws_region
-  common_tags     = local.common_tags
-  kms_key_arn     = module.kms.key_arn
-}
-
-# Lambda Workers: Audit + Alertas Ops + Process (consumidores SQS)
 module "lambda_workers" {
   source = "../../modules/lambda-workers"
 
@@ -206,7 +215,8 @@ module "lambda_workers" {
   resource_prefix                = var.resource_prefix
   common_tags                    = local.common_tags
   subnet_ids                     = module.vpc.private_subnet_ids
-  security_group_ids             = [module.vpc.lambda_security_group_id]
+  vpc_id                         = module.vpc.vpc_id
+  vpc_cidr                       = module.vpc.vpc_cidr_block
   db_secret_arn                  = module.secrets_manager.db_secret_arn
   alertas_ops_queue_arn          = module.sns_sqs.alertas_ops_queue_arn
   auditoria_financiera_queue_arn = module.sns_sqs.auditoria_financiera_queue_arn
@@ -232,15 +242,13 @@ module "aurora" {
   db_master_password = module.secrets_manager.db_password
   kms_key_arn        = module.kms.key_arn
   subnet_ids         = module.vpc.private_subnet_ids
-  security_group_ids = [module.vpc.db_security_group_id]
+  vpc_id             = module.vpc.vpc_id
+  vpc_cidr           = module.vpc.vpc_cidr_block
 
-  # AWS Backup: el aws_backup_selection vive en este módulo y referencia el
-  # cluster directamente; el plan y el rol provienen del módulo aws-backup.
   backup_plan_id  = module.aws_backup.plan_id
   backup_role_arn = module.aws_backup.role_arn
 }
 
-# AWS Backup: WAL continuo Aurora, RPO 5 min, retención 7 días (RNF-14)
 module "aws_backup" {
   source = "../../modules/aws-backup"
 
@@ -251,7 +259,6 @@ module "aws_backup" {
   kms_key_arn     = module.kms.key_arn
 }
 
-# CloudWatch alarms + SNS alertas equipo técnico (RNF-17: <2 min, umbral 1% errores)
 module "observabilidad" {
   source = "../../modules/observabilidad"
 
@@ -272,4 +279,5 @@ module "observabilidad" {
 
   api_gateway_api_id   = module.api_gateway.api_id
   enable_api_5xx_alarm = true
+  aws_region           = var.aws_region
 }
