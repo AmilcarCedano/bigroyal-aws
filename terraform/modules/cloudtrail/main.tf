@@ -6,7 +6,7 @@ resource "aws_s3_bucket" "trail" {
   #checkov:skip=CKV_AWS_144:Bucket de logs — CRR no aplica a destinos de logging
   #checkov:skip=CKV2_AWS_62:Bucket de logs — notificaciones innecesarias en destino de logging
   bucket        = "${var.resource_prefix}-cloudtrail-logs"
-  force_destroy = false
+  force_destroy = true
   tags          = var.common_tags
 }
 
@@ -20,6 +20,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "trail" {
   rule {
     id     = "expire-cloudtrail-logs"
     status = "Enabled"
+    filter {}
     expiration { days = 365 }
     noncurrent_version_expiration { noncurrent_days = 90 }
     abort_incomplete_multipart_upload { days_after_initiation = 7 }
@@ -77,6 +78,21 @@ resource "aws_sns_topic" "trail_alerts" {
   name              = "${var.resource_prefix}-cloudtrail-alerts"
   kms_master_key_id = var.kms_key_arn
   tags              = var.common_tags
+}
+
+resource "aws_sns_topic_policy" "trail_alerts" {
+  arn = aws_sns_topic.trail_alerts.arn
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "AllowCloudTrailPublish"
+      Effect    = "Allow"
+      Principal = { Service = "cloudtrail.amazonaws.com" }
+      Action    = "SNS:Publish"
+      Resource  = aws_sns_topic.trail_alerts.arn
+      Condition = { StringEquals = { "aws:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.resource_prefix}-trail" } }
+    }]
+  })
 }
 
 # Trail multi-región — registra acciones de los 3 colaboradores (RNF-18)
