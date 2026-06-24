@@ -10,4 +10,7 @@ variable "kms_key_arn"                    { type = string }
 variable "alertas_ops_queue_arn"          { type = string }
 variable "auditoria_financiera_queue_arn" { type = string }
 variable "inventario_queue_arn"           { type = string }
-variable "ses_sender_email"               { type = string; default = "alertas@bigroyal.com" }
+variable "ses_sender_email" {
+  type    = string
+  default = "alertas@bigroyal.com"
+}

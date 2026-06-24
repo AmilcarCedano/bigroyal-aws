@@ -48,7 +48,7 @@ resource "aws_secretsmanager_secret_version" "jwt" {
 # SG propio — egress solo HTTPS hacia VPC endpoints — CKV_AWS_382, CKV2_AWS_5
 resource "aws_security_group" "rotation" {
   name        = "${var.resource_prefix}-rotation-sg"
-  description = "SG Lambda rotación Secrets Manager — egress solo HTTPS VPC"
+  description = "SG Lambda rotation Secrets Manager - egress HTTPS VPC only"
   vpc_id      = var.vpc_id
 
   egress {
@@ -101,6 +101,12 @@ resource "aws_iam_role_policy" "rotation" {
         Effect   = "Allow"
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.resource_prefix}-secret-rotation:*"
+      },
+      {
+        Sid      = "DLQSendMessage"
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = aws_sqs_queue.rotation_dlq.arn
       }
     ]
   })
@@ -149,7 +155,7 @@ resource "aws_lambda_function" "rotation" {
   handler                        = "index.handler"
   runtime                        = "nodejs20.x"
   timeout                        = 30
-  reserved_concurrent_executions = 5
+  reserved_concurrent_executions = -1
   kms_key_arn                    = var.kms_key_arn
   code_signing_config_arn        = aws_lambda_code_signing_config.rotation.arn
   filename                       = data.archive_file.rotation_stub.output_path

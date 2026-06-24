@@ -21,7 +21,13 @@ resource "aws_s3_bucket" "logs" {
 
 resource "aws_s3_bucket_ownership_controls" "logs" {
   bucket = aws_s3_bucket.logs.id
-  rule { object_ownership = "BucketOwnerEnforced" }
+  rule { object_ownership = "BucketOwnerPreferred" }
+}
+
+resource "aws_s3_bucket_acl" "logs" {
+  bucket     = aws_s3_bucket.logs.id
+  acl        = "log-delivery-write"
+  depends_on = [aws_s3_bucket_ownership_controls.logs]
 }
 
 resource "aws_s3_bucket_public_access_block" "logs" {
@@ -52,6 +58,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   rule {
     id     = "expire-cf-logs"
     status = "Enabled"
+    filter {}
     expiration { days = 90 }
     abort_incomplete_multipart_upload { days_after_initiation = 7 }
   }

@@ -1,7 +1,7 @@
 # SG del KDS Cocina Lambda — CKV_AWS_382, CKV2_AWS_5
 resource "aws_security_group" "lambda" {
   name        = "${var.resource_prefix}-kds-cocina-sg"
-  description = "SG Lambda KDS Cocina — egress solo hacia VPC"
+  description = "SG Lambda KDS Cocina - egress only to VPC"
   vpc_id      = var.vpc_id
 
   egress {
@@ -49,6 +49,19 @@ resource "aws_sqs_queue" "kds_dlq" {
   tags                      = var.common_tags
 }
 
+resource "aws_iam_role_policy" "dlq" {
+  name = "${var.resource_prefix}-kds-dlq-policy"
+  role = aws_iam_role.lambda.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = [aws_sqs_queue.kds_dlq.arn]
+    }]
+  })
+}
+
 # Firma de código Lambda — CKV_AWS_272
 resource "aws_signer_signing_profile" "this" {
   name_prefix = "bigroyal_kds_"
@@ -88,7 +101,7 @@ resource "aws_lambda_function" "kds_cocina" {
   runtime                        = "nodejs20.x"
   timeout                        = 10
   memory_size                    = 256
-  reserved_concurrent_executions = 50
+  reserved_concurrent_executions = -1
   kms_key_arn                    = var.kms_key_arn
   code_signing_config_arn        = aws_lambda_code_signing_config.this.arn
 

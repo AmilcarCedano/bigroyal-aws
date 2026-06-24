@@ -44,6 +44,14 @@ resource "aws_apigatewayv2_route" "public" {
   authorization_type = "NONE"
 }
 
+# Ruta OPTIONS sin auth para preflight CORS
+resource "aws_apigatewayv2_route" "options" {
+  api_id             = aws_apigatewayv2_api.this.id
+  route_key          = "OPTIONS /{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+  authorization_type = "NONE"
+}
+
 # Ruta protegida con JWT (todas las demás)
 resource "aws_apigatewayv2_route" "protected" {
   api_id             = aws_apigatewayv2_api.this.id

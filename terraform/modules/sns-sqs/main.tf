@@ -1,8 +1,27 @@
+data "aws_caller_identity" "current" {}
+
 # SNS Topic FanOut — el backend publica aquí cuando confirma un pedido, cifrado KMS
 resource "aws_sns_topic" "fanout" {
   name              = "${var.resource_prefix}-fanout"
   kms_master_key_id = var.kms_key_arn
   tags              = var.common_tags
+}
+
+resource "aws_sns_topic_policy" "fanout" {
+  arn = aws_sns_topic.fanout.arn
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowS3Publish"
+        Effect    = "Allow"
+        Principal = { Service = "s3.amazonaws.com" }
+        Action    = "SNS:Publish"
+        Resource  = aws_sns_topic.fanout.arn
+        Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
+      }
+    ]
+  })
 }
 
 # ─────────────────────────────────────────────
