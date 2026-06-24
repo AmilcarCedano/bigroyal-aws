@@ -12,6 +12,9 @@ resource "aws_cloudfront_origin_access_control" "this" {
 }
 
 resource "aws_s3_bucket" "logs" {
+  #checkov:skip=CKV_AWS_18:Bucket de access logs de CloudFront — no se auto-loguea (dependencia circular)
+  #checkov:skip=CKV_AWS_144:Bucket de logs — CRR no aplica a destinos de logging
+  #checkov:skip=CKV2_AWS_62:Bucket de logs — notificaciones innecesarias en destino de logging
   bucket = "${var.resource_prefix}-cf-access-logs"
   tags   = var.common_tags
 }
@@ -54,7 +57,38 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   }
 }
 
+# Política de headers de seguridad HTTP — CKV2_AWS_32
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name = "${var.resource_prefix}-security-headers"
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+    content_type_options {
+      override = true
+    }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    xss_protection {
+      mode_block = true
+      protection = true
+      override   = true
+    }
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+  }
+}
+
 resource "aws_cloudfront_distribution" "this" {
+  #checkov:skip=CKV2_AWS_47:WAF ACL definida en módulo waf separado contiene AWSManagedRulesKnownBadInputsRuleSet (Log4JRCE) — Checkov no resuelve ref cross-module
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -89,11 +123,12 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   default_cache_behavior {
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = local.origin_group_id
-    viewer_protocol_policy = "redirect-to-https"
-    compress               = true
+    allowed_methods              = ["GET", "HEAD", "OPTIONS"]
+    cached_methods               = ["GET", "HEAD"]
+    target_origin_id             = local.origin_group_id
+    viewer_protocol_policy       = "redirect-to-https"
+    compress                     = true
+    response_headers_policy_id   = aws_cloudfront_response_headers_policy.security.id
 
     forwarded_values {
       query_string = false
@@ -119,15 +154,18 @@ resource "aws_cloudfront_distribution" "this" {
 
   restrictions {
     geo_restriction {
-      restriction_type  = "whitelist"
-      locations         = ["PE", "US", "CO", "MX", "CL", "AR"]
+      restriction_type = "whitelist"
+      locations        = ["PE", "US", "CO", "MX", "CL", "AR"]
     }
   }
 
+  # Certificado SSL condicional — CKV2_AWS_42
+  # Si acm_certificate_arn es null usa el certificado por defecto de CloudFront (*.cloudfront.net con HTTPS)
   viewer_certificate {
-    acm_certificate_arn      = var.acm_certificate_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
+    cloudfront_default_certificate = var.acm_certificate_arn == null
+    acm_certificate_arn            = var.acm_certificate_arn
+    ssl_support_method             = var.acm_certificate_arn != null ? "sni-only" : null
+    minimum_protocol_version       = var.acm_certificate_arn != null ? "TLSv1.2_2021" : "TLSv1.2_2021"
   }
 
   tags = var.common_tags

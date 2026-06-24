@@ -1,14 +1,32 @@
-# ─────────────────────────────────────────────
-# Roles IAM individuales por Lambda (RNF-06: rol de ejecución individual
-# con permisos estrictamente necesarios para cada función)
-# ─────────────────────────────────────────────
-
 locals {
   vpc_policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
   sqs_policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole"
 }
 
-# DLQ compartida para los 3 workers (mensajes fallidos tras reintentos)
+# SG compartido para los workers — CKV_AWS_382, CKV2_AWS_5
+resource "aws_security_group" "workers" {
+  name        = "${var.resource_prefix}-workers-sg"
+  description = "SG Lambda Workers — egress solo hacia VPC"
+  vpc_id      = var.vpc_id
+
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "HTTPS hacia VPC endpoints (Secrets Manager, KMS, SQS)"
+  }
+  egress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "PostgreSQL hacia Aurora"
+  }
+
+  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-workers-sg" })
+}
+
 resource "aws_sqs_queue" "workers_dlq" {
   name                      = "${var.resource_prefix}-workers-dlq"
   message_retention_seconds = 1209600
@@ -16,7 +34,28 @@ resource "aws_sqs_queue" "workers_dlq" {
   tags                      = var.common_tags
 }
 
-# Rol exclusivo para Lambda Audit
+# Firma de código Lambda compartida para workers — CKV_AWS_272
+resource "aws_signer_signing_profile" "workers" {
+  name_prefix = "bigroyal_workers_"
+  platform_id = "AWSLambda-SHA384-ECDSA"
+
+  signature_validity_period {
+    value = 5
+    type  = "YEARS"
+  }
+
+  tags = var.common_tags
+}
+
+resource "aws_lambda_code_signing_config" "workers" {
+  allowed_publishers {
+    signing_profile_version_arns = [aws_signer_signing_profile.workers.version_arn]
+  }
+  policies {
+    untrusted_artifact_on_deployment = "Warn"
+  }
+}
+
 resource "aws_iam_role" "audit" {
   name = "${var.resource_prefix}-audit-role"
   assume_role_policy = jsonencode({
@@ -41,7 +80,6 @@ resource "aws_iam_role_policy" "audit_secrets" {
   })
 }
 
-# Rol exclusivo para Lambda Alertas Ops
 resource "aws_iam_role" "alertas_ops" {
   name = "${var.resource_prefix}-alertas-ops-role"
   assume_role_policy = jsonencode({
@@ -66,7 +104,6 @@ resource "aws_iam_role_policy" "alertas_ses" {
   })
 }
 
-# Rol exclusivo para Lambda Process
 resource "aws_iam_role" "process" {
   name = "${var.resource_prefix}-process-role"
   assume_role_policy = jsonencode({
@@ -91,21 +128,15 @@ resource "aws_iam_role_policy" "process_secrets" {
   })
 }
 
-# ─────────────────────────────────────────────
-# Zip placeholder compartido
-# ─────────────────────────────────────────────
 data "archive_file" "placeholder" {
   type        = "zip"
   output_path = "${path.module}/worker-placeholder.zip"
   source {
-    content  = "exports.handler = async (event) => { console.log(JSON.stringify(event)); return { statusCode: 200 }; };"
+    content  = "exports.handler = async (event) => { return { statusCode: 200 }; };"
     filename = "index.js"
   }
 }
 
-# ─────────────────────────────────────────────
-# Lambda Audit (RNF-10)
-# ─────────────────────────────────────────────
 resource "aws_lambda_function" "audit" {
   function_name                  = "${var.resource_prefix}-lambda-audit"
   role                           = aws_iam_role.audit.arn
@@ -115,6 +146,7 @@ resource "aws_lambda_function" "audit" {
   memory_size                    = 256
   reserved_concurrent_executions = 50
   kms_key_arn                    = var.kms_key_arn
+  code_signing_config_arn        = aws_lambda_code_signing_config.workers.arn
   filename                       = data.archive_file.placeholder.output_path
   source_code_hash               = data.archive_file.placeholder.output_base64sha256
 
@@ -125,25 +157,17 @@ resource "aws_lambda_function" "audit" {
     }
   }
 
-  tracing_config {
-    mode = "Active"
-  }
-
-  dead_letter_config {
-    target_arn = aws_sqs_queue.workers_dlq.arn
-  }
+  tracing_config { mode = "Active" }
+  dead_letter_config { target_arn = aws_sqs_queue.workers_dlq.arn }
 
   vpc_config {
     subnet_ids         = var.subnet_ids
-    security_group_ids = var.security_group_ids
+    security_group_ids = [aws_security_group.workers.id]
   }
 
   tags = var.common_tags
 }
 
-# ─────────────────────────────────────────────
-# Lambda Alertas Ops (RNF-12)
-# ─────────────────────────────────────────────
 resource "aws_lambda_function" "alertas_ops" {
   function_name                  = "${var.resource_prefix}-lambda-alertas-ops"
   role                           = aws_iam_role.alertas_ops.arn
@@ -153,6 +177,7 @@ resource "aws_lambda_function" "alertas_ops" {
   memory_size                    = 256
   reserved_concurrent_executions = 50
   kms_key_arn                    = var.kms_key_arn
+  code_signing_config_arn        = aws_lambda_code_signing_config.workers.arn
   filename                       = data.archive_file.placeholder.output_path
   source_code_hash               = data.archive_file.placeholder.output_base64sha256
 
@@ -163,25 +188,17 @@ resource "aws_lambda_function" "alertas_ops" {
     }
   }
 
-  tracing_config {
-    mode = "Active"
-  }
-
-  dead_letter_config {
-    target_arn = aws_sqs_queue.workers_dlq.arn
-  }
+  tracing_config { mode = "Active" }
+  dead_letter_config { target_arn = aws_sqs_queue.workers_dlq.arn }
 
   vpc_config {
     subnet_ids         = var.subnet_ids
-    security_group_ids = var.security_group_ids
+    security_group_ids = [aws_security_group.workers.id]
   }
 
   tags = var.common_tags
 }
 
-# ─────────────────────────────────────────────
-# Lambda Process (RNF-11)
-# ─────────────────────────────────────────────
 resource "aws_lambda_function" "process" {
   function_name                  = "${var.resource_prefix}-lambda-process"
   role                           = aws_iam_role.process.arn
@@ -191,6 +208,7 @@ resource "aws_lambda_function" "process" {
   memory_size                    = 512
   reserved_concurrent_executions = 50
   kms_key_arn                    = var.kms_key_arn
+  code_signing_config_arn        = aws_lambda_code_signing_config.workers.arn
   filename                       = data.archive_file.placeholder.output_path
   source_code_hash               = data.archive_file.placeholder.output_base64sha256
 
@@ -201,25 +219,17 @@ resource "aws_lambda_function" "process" {
     }
   }
 
-  tracing_config {
-    mode = "Active"
-  }
-
-  dead_letter_config {
-    target_arn = aws_sqs_queue.workers_dlq.arn
-  }
+  tracing_config { mode = "Active" }
+  dead_letter_config { target_arn = aws_sqs_queue.workers_dlq.arn }
 
   vpc_config {
     subnet_ids         = var.subnet_ids
-    security_group_ids = var.security_group_ids
+    security_group_ids = [aws_security_group.workers.id]
   }
 
   tags = var.common_tags
 }
 
-# ─────────────────────────────────────────────
-# Triggers SQS → Lambda (retención 4 días, RNF-09)
-# ─────────────────────────────────────────────
 resource "aws_lambda_event_source_mapping" "audit" {
   event_source_arn = var.auditoria_financiera_queue_arn
   function_name    = aws_lambda_function.audit.arn

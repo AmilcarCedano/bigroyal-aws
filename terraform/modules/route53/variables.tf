@@ -4,3 +4,4 @@ variable "resource_prefix"       { type = string }
 variable "common_tags"           { type = map(string) }
 variable "domain_name"           { type = string }
 variable "cloudfront_domain_name" { type = string }
+variable "kms_key_arn"           { type = string }

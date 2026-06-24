@@ -65,76 +65,29 @@ resource "aws_route_table_association" "private_b" {
   route_table_id = aws_route_table.private.id
 }
 
-resource "aws_security_group" "lambda" {
-  name        = "${var.resource_prefix}-lambda-sg"
-  description = "SG para Lambdas en subred privada"
+# SG para VPC Interface Endpoints — permite HTTPS desde las subnets privadas
+resource "aws_security_group" "vpc_endpoints" {
+  name        = "${var.resource_prefix}-vpce-sg"
+  description = "SG para VPC Interface Endpoints (HTTPS inbound desde subnets privadas)"
   vpc_id      = aws_vpc.this.id
 
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    self        = true
-    description = "HTTPS intra-lambda"
+    cidr_blocks = [var.vpc_cidr]
+    description = "HTTPS desde subnets privadas hacia endpoints"
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "HTTPS hacia subnets privadas"
   }
 
-  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-lambda-sg" })
-}
-
-resource "aws_security_group" "db" {
-  name        = "${var.resource_prefix}-db-sg"
-  description = "SG para Aurora PostgreSQL"
-  vpc_id      = aws_vpc.this.id
-
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda.id]
-    description     = "PostgreSQL from Lambda SG"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound"
-  }
-
-  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-db-sg" })
-}
-
-resource "aws_security_group" "redis" {
-  name        = "${var.resource_prefix}-redis-sg"
-  description = "SG para ElastiCache Redis"
-  vpc_id      = aws_vpc.this.id
-
-  ingress {
-    from_port       = 6379
-    to_port         = 6379
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda.id]
-    description     = "Redis from Lambda SG"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound"
-  }
-
-  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-redis-sg" })
+  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-vpce-sg" })
 }
 
 resource "aws_default_security_group" "default" {
@@ -142,12 +95,54 @@ resource "aws_default_security_group" "default" {
   tags   = merge(var.common_tags, { Name = "${var.resource_prefix}-default-sg-blocked" })
 }
 
+# VPC Gateway Endpoint para S3 (gratis) — evita salida a internet
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.this.id
   service_name      = "com.amazonaws.${var.aws_region}.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_route_table.private.id]
   tags = merge(var.common_tags, { Name = "${var.resource_prefix}-vpce-s3" })
+}
+
+# VPC Interface Endpoints — Lambda accede a servicios AWS sin salir a internet — CKV_AWS_382
+resource "aws_vpc_endpoint" "secretsmanager" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.aws_region}.secretsmanager"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-vpce-secretsmanager" })
+}
+
+resource "aws_vpc_endpoint" "sns" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.aws_region}.sns"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-vpce-sns" })
+}
+
+resource "aws_vpc_endpoint" "sqs" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.aws_region}.sqs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-vpce-sqs" })
+}
+
+resource "aws_vpc_endpoint" "kms" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.aws_region}.kms"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+  tags = merge(var.common_tags, { Name = "${var.resource_prefix}-vpce-kms" })
 }
 
 resource "aws_iam_role" "flow_logs" {
