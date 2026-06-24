@@ -21,8 +21,8 @@ jobs:
           chmod +x ci/run-checkov.sh
           ci/run-checkov.sh
 
-  terraform-plan-prod:
-    name: Terraform Plan (prod)
+  terraform-plan-dev:
+    name: Terraform Plan (dev)
     runs-on: ubuntu-latest
     needs: checkov
     steps:
@@ -43,4 +43,4 @@ jobs:
       - name: Terraform Plan
         run: |
           chmod +x ci/terraform-plan.sh
-          ci/terraform-plan.sh prod plan
+          ci/terraform-plan.sh dev plan
