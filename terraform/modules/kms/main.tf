@@ -30,6 +30,13 @@ resource "aws_kms_key" "main" {
         Principal = { Service = "cloudtrail.amazonaws.com" }
         Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
         Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudFrontS3Access"
+        Effect = "Allow"
+        Principal = { Service = "cloudfront.amazonaws.com" }
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey*"]
+        Resource = "*"
       }
     ]
   })

@@ -1,7 +1,7 @@
 # SG de Redis — ingress desde VPC CIDR — CKV2_AWS_5
 resource "aws_security_group" "redis" {
   name        = "${var.resource_prefix}-redis-sg"
-  description = "SG ElastiCache Redis — ingress desde VPC CIDR"
+  description = "SG ElastiCache Redis - ingress from VPC CIDR"
   vpc_id      = var.vpc_id
 
   ingress {

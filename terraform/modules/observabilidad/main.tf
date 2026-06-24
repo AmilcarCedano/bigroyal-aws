@@ -100,9 +100,10 @@ resource "aws_cloudwatch_dashboard" "main" {
       {
         type = "metric"
         properties = {
-          title  = "Errores Lambda (todas las funciones)"
-          period = 300
-          stat   = "Sum"
+          title   = "Errores Lambda (todas las funciones)"
+          region  = var.aws_region
+          period  = 300
+          stat    = "Sum"
           metrics = [
             for fn in var.lambda_function_names : ["AWS/Lambda", "Errors", "FunctionName", fn]
           ]
@@ -111,9 +112,10 @@ resource "aws_cloudwatch_dashboard" "main" {
       {
         type = "metric"
         properties = {
-          title  = "Invocaciones Lambda"
-          period = 300
-          stat   = "Sum"
+          title   = "Invocaciones Lambda"
+          region  = var.aws_region
+          period  = 300
+          stat    = "Sum"
           metrics = [
             for fn in var.lambda_function_names : ["AWS/Lambda", "Invocations", "FunctionName", fn]
           ]

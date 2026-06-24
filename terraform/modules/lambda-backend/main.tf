@@ -1,7 +1,7 @@
 # SG propio del Lambda — egress restringido a VPC CIDR, sin 0.0.0.0/0 — CKV_AWS_382, CKV2_AWS_5
 resource "aws_security_group" "lambda" {
   name        = "${var.resource_prefix}-lambda-sg"
-  description = "SG Lambda backend — egress solo hacia VPC"
+  description = "SG Lambda backend - egress only to VPC"
   vpc_id      = var.vpc_id
 
   egress {
@@ -134,7 +134,7 @@ resource "aws_lambda_function" "this" {
   runtime                        = var.runtime
   timeout                        = var.timeout
   memory_size                    = var.memory_size
-  reserved_concurrent_executions = 100
+  reserved_concurrent_executions = -1
 
   filename         = data.archive_file.placeholder.output_path
   source_code_hash = data.archive_file.placeholder.output_base64sha256

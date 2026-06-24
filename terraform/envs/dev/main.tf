@@ -279,4 +279,5 @@ module "observabilidad" {
 
   api_gateway_api_id   = module.api_gateway.api_id
   enable_api_5xx_alarm = true
+  aws_region           = var.aws_region
 }

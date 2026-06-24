@@ -42,6 +42,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
   rule {
     id     = "expire-access-logs"
     status = "Enabled"
+    filter {}
     expiration { days = 90 }
     abort_incomplete_multipart_upload { days_after_initiation = 7 }
   }
@@ -89,6 +90,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "replica" {
   rule {
     id     = "expire-old-replica-versions"
     status = "Enabled"
+    filter {}
     noncurrent_version_expiration { noncurrent_days = 90 }
     abort_incomplete_multipart_upload { days_after_initiation = 7 }
   }
@@ -136,8 +138,9 @@ resource "aws_iam_role_policy" "replication" {
 
 # Bucket principal del frontend
 resource "aws_s3_bucket" "frontend" {
-  bucket = "${var.resource_prefix}-frontend"
-  tags   = var.common_tags
+  bucket        = "${var.resource_prefix}-frontend"
+  force_destroy = true
+  tags          = var.common_tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "frontend" {
@@ -181,6 +184,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "frontend" {
   rule {
     id     = "transition-old-versions"
     status = "Enabled"
+    filter {}
     noncurrent_version_expiration { noncurrent_days = 90 }
     abort_incomplete_multipart_upload { days_after_initiation = 7 }
   }

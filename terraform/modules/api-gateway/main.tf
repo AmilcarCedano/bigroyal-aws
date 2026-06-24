@@ -45,6 +45,7 @@ resource "aws_apigatewayv2_route" "public" {
 }
 
 # Ruta protegida con JWT (todas las demás)
+# CORS preflight (OPTIONS) lo maneja el cors_configuration del API, no hace falta ruta explícita
 resource "aws_apigatewayv2_route" "protected" {
   api_id             = aws_apigatewayv2_api.this.id
   route_key          = "ANY /{proxy+}"

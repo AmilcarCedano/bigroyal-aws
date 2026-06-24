@@ -1,7 +1,7 @@
 # SG de Aurora — ingress solo desde VPC CIDR — CKV2_AWS_5
 resource "aws_security_group" "db" {
   name        = "${var.resource_prefix}-db-sg"
-  description = "SG Aurora PostgreSQL — ingress solo desde VPC CIDR"
+  description = "SG Aurora PostgreSQL - ingress only from VPC CIDR"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -82,7 +82,6 @@ resource "aws_rds_cluster" "this" {
 
   iam_database_authentication_enabled = true
 
-  # Protección contra borrado accidental del cluster — CKV_AWS_139
   deletion_protection = true
 
   skip_final_snapshot = true
