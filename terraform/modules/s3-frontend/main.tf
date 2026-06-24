@@ -2,6 +2,9 @@ data "aws_caller_identity" "current" {}
 
 # Bucket de logs de acceso S3 — CKV_AWS_18
 resource "aws_s3_bucket" "access_logs" {
+  #checkov:skip=CKV_AWS_18:Bucket de access logs — no se auto-loguea (dependencia circular)
+  #checkov:skip=CKV_AWS_144:Bucket de logs — CRR no aplica a destinos de logging
+  #checkov:skip=CKV2_AWS_62:Bucket de logs — notificaciones innecesarias en destino de logging
   bucket = "${var.resource_prefix}-frontend-access-logs"
   tags   = var.common_tags
 }
@@ -46,6 +49,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
 
 # Bucket replica en us-west-2 para CRR — CKV_AWS_144
 resource "aws_s3_bucket" "replica" {
+  #checkov:skip=CKV_AWS_18:Bucket réplica DR — no necesita access logging propio
+  #checkov:skip=CKV2_AWS_62:Bucket réplica DR — notificaciones no aplican a destino de replicación
   provider = aws.replica
   bucket   = "${var.resource_prefix}-frontend-replica"
   tags     = var.common_tags
@@ -64,6 +69,29 @@ resource "aws_s3_bucket_public_access_block" "replica" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+# KMS encryption en el bucket réplica — CKV_AWS_145
+resource "aws_s3_bucket_server_side_encryption_configuration" "replica" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.replica.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "aws:kms"
+    }
+  }
+}
+
+# Lifecycle en el bucket réplica — CKV2_AWS_61
+resource "aws_s3_bucket_lifecycle_configuration" "replica" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.replica.id
+  rule {
+    id     = "expire-old-replica-versions"
+    status = "Enabled"
+    noncurrent_version_expiration { noncurrent_days = 90 }
+    abort_incomplete_multipart_upload { days_after_initiation = 7 }
+  }
 }
 
 # IAM role para replicación cross-region — CKV_AWS_144

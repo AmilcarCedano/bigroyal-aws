@@ -2,6 +2,9 @@ data "aws_caller_identity" "current" {}
 
 # Bucket S3 donde CloudTrail almacena los logs inmutables
 resource "aws_s3_bucket" "trail" {
+  #checkov:skip=CKV_AWS_18:Bucket de logs CloudTrail — no se auto-loguea (dependencia circular)
+  #checkov:skip=CKV_AWS_144:Bucket de logs — CRR no aplica a destinos de logging
+  #checkov:skip=CKV2_AWS_62:Bucket de logs — notificaciones innecesarias en destino de logging
   bucket        = "${var.resource_prefix}-cloudtrail-logs"
   force_destroy = false
   tags          = var.common_tags

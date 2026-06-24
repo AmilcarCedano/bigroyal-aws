@@ -134,6 +134,9 @@ module "secrets_manager" {
   db_name            = var.db_name
   db_master_username = var.db_master_username
   kms_key_arn        = module.kms.key_arn
+  vpc_id             = module.vpc.vpc_id
+  subnet_ids         = module.vpc.private_subnet_ids
+  vpc_cidr           = module.vpc.vpc_cidr_block
 }
 
 module "sns_sqs" {

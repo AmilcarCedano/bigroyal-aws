@@ -12,6 +12,9 @@ resource "aws_cloudfront_origin_access_control" "this" {
 }
 
 resource "aws_s3_bucket" "logs" {
+  #checkov:skip=CKV_AWS_18:Bucket de access logs de CloudFront — no se auto-loguea (dependencia circular)
+  #checkov:skip=CKV_AWS_144:Bucket de logs — CRR no aplica a destinos de logging
+  #checkov:skip=CKV2_AWS_62:Bucket de logs — notificaciones innecesarias en destino de logging
   bucket = "${var.resource_prefix}-cf-access-logs"
   tags   = var.common_tags
 }
@@ -85,6 +88,7 @@ resource "aws_cloudfront_response_headers_policy" "security" {
 }
 
 resource "aws_cloudfront_distribution" "this" {
+  #checkov:skip=CKV2_AWS_47:WAF ACL definida en módulo waf separado contiene AWSManagedRulesKnownBadInputsRuleSet (Log4JRCE) — Checkov no resuelve ref cross-module
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
