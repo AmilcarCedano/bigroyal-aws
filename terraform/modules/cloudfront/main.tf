@@ -21,13 +21,7 @@ resource "aws_s3_bucket" "logs" {
 
 resource "aws_s3_bucket_ownership_controls" "logs" {
   bucket = aws_s3_bucket.logs.id
-  rule { object_ownership = "BucketOwnerPreferred" }
-}
-
-resource "aws_s3_bucket_acl" "logs" {
-  bucket     = aws_s3_bucket.logs.id
-  acl        = "log-delivery-write"
-  depends_on = [aws_s3_bucket_ownership_controls.logs]
+  rule { object_ownership = "BucketOwnerEnforced" }
 }
 
 resource "aws_s3_bucket_public_access_block" "logs" {
@@ -101,12 +95,6 @@ resource "aws_cloudfront_distribution" "this" {
   default_root_object = "index.html"
   price_class         = var.price_class
   web_acl_id          = var.web_acl_arn
-
-  logging_config {
-    include_cookies = false
-    bucket          = aws_s3_bucket.logs.bucket_domain_name
-    prefix          = "cf-access-logs/"
-  }
 
   origin {
     domain_name              = var.origin_domain_name

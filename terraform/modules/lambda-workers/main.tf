@@ -3,6 +3,9 @@ locals {
   sqs_policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole"
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 # SG compartido para los workers — CKV_AWS_382, CKV2_AWS_5
 resource "aws_security_group" "workers" {
   name        = "${var.resource_prefix}-workers-sg"
@@ -108,7 +111,7 @@ resource "aws_iam_role_policy" "alertas_ses" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      { Effect = "Allow", Action = ["ses:SendEmail", "ses:SendRawEmail"], Resource = "*" },
+      { Effect = "Allow", Action = ["ses:SendEmail", "ses:SendRawEmail"], Resource = "arn:aws:ses:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:identity/${var.ses_sender_email}" },
       { Effect = "Allow", Action = ["sqs:SendMessage"], Resource = [aws_sqs_queue.workers_dlq.arn] }
     ]
   })
