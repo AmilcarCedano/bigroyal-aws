@@ -11,8 +11,8 @@ echo "Entorno: ${ENVIRONMENT}"
 echo "Acción:  ${ACTION}"
 echo "Carpeta: ${ENV_DIR}"
 
-if [ ! -d "${ENV_DIR}" ]; then
-  echo "ERROR: directorio de entorno no existe: ${ENV_DIR}"
+if [[ ! -d "${ENV_DIR}" ]]; then
+  echo "ERROR: directorio de entorno no existe: ${ENV_DIR}" >&2
   exit 1
 fi
 
@@ -25,7 +25,7 @@ echo "==== terraform validate ===="
 terraform validate
 
 TFVARS_ARG=()
-if [ -f "terraform.tfvars" ]; then
+if [[ -f "terraform.tfvars" ]]; then
   TFVARS_ARG=(-var-file="terraform.tfvars")
 fi
 
@@ -35,7 +35,7 @@ case "${ACTION}" in
     terraform plan -input=false -out=tfplan "${TFVARS_ARG[@]}"
     ;;
   apply)
-    if [ -f tfplan ]; then
+    if [[ -f tfplan ]]; then
       terraform apply -input=false tfplan
     else
       terraform plan -input=false -out=tfplan "${TFVARS_ARG[@]}"
