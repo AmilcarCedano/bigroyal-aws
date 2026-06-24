@@ -39,7 +39,3 @@ variable "db_master_username" {
   sensitive   = true
   default     = "bigroyaladmin"
 }
-variable "aurora_deletion_protection" {
-  description = "Protección contra borrado del cluster Aurora (false en dev, true en prod)"
-  type        = bool
-}

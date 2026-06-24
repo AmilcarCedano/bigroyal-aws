@@ -82,7 +82,7 @@ resource "aws_rds_cluster" "this" {
 
   iam_database_authentication_enabled = true
 
-  deletion_protection = var.deletion_protection
+  deletion_protection = true
 
   skip_final_snapshot = true
 

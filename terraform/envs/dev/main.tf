@@ -245,9 +245,8 @@ module "aurora" {
   vpc_id             = module.vpc.vpc_id
   vpc_cidr           = module.vpc.vpc_cidr_block
 
-  backup_plan_id      = module.aws_backup.plan_id
-  backup_role_arn     = module.aws_backup.role_arn
-  deletion_protection = var.aurora_deletion_protection
+  backup_plan_id  = module.aws_backup.plan_id
+  backup_role_arn = module.aws_backup.role_arn
 }
 
 module "aws_backup" {

@@ -26,7 +26,3 @@ variable "engine_version" {
 }
 variable "backup_plan_id"  { type = string }
 variable "backup_role_arn" { type = string }
-variable "deletion_protection" {
-  type    = bool
-  default = true
-}

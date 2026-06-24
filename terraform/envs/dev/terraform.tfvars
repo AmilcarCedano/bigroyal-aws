@@ -9,5 +9,3 @@ ses_sender_email = "alertas@bigroyal.com"
 
 db_name            = "bigroyal"
 db_master_username = "bigroyaladmin"
-
-aurora_deletion_protection = false
