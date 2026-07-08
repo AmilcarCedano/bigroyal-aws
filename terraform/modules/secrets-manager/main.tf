@@ -178,6 +178,8 @@ resource "aws_lambda_function" "rotation" {
     security_group_ids = [aws_security_group.rotation.id]
   }
 
+  depends_on = [aws_iam_role_policy.rotation]
+
   tags = var.common_tags
 }
 
