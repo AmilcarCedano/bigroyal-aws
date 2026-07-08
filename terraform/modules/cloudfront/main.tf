@@ -15,8 +15,9 @@ resource "aws_s3_bucket" "logs" {
   #checkov:skip=CKV_AWS_18:Bucket de access logs de CloudFront — no se auto-loguea (dependencia circular)
   #checkov:skip=CKV_AWS_144:Bucket de logs — CRR no aplica a destinos de logging
   #checkov:skip=CKV2_AWS_62:Bucket de logs — notificaciones innecesarias en destino de logging
-  bucket = "${var.resource_prefix}-cf-access-logs"
-  tags   = var.common_tags
+  bucket        = "${var.resource_prefix}-cf-access-logs"
+  force_destroy = true # dev: CloudFront entrega logs versionados que bloquean el destroy
+  tags          = var.common_tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "logs" {
