@@ -156,6 +156,9 @@ resource "aws_lambda_function" "this" {
       DB_SECRET_ARN = var.db_secret_arn
       REDIS_HOST    = var.redis_endpoint
       SNS_TOPIC_ARN = var.sns_topic_arn
+      DATABASE_URL  = var.database_url
+      JWT_SECRET    = var.jwt_secret
+      CORS_ORIGIN   = var.cors_origin
     }
   }
 
@@ -165,4 +168,12 @@ resource "aws_lambda_function" "this" {
   }
 
   tags = var.common_tags
+
+  # El código real se despliega fuera de Terraform (aws lambda update-function-code)
+  # porque Prisma + node_modules superan el límite de subida directa y requieren
+  # empaquetado específico para el runtime Linux de Lambda. Terraform solo gestiona
+  # la infraestructura del Lambda, no su código — evita pisar el deploy real con el placeholder.
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
 }

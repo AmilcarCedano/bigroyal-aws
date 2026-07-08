@@ -8,6 +8,16 @@ output "cloudfront_url" {
   value       = "https://${module.cloudfront.cdn_domain_name}"
 }
 
+output "cloudfront_distribution_id" {
+  description = "ID de la distribución CloudFront (para invalidar caché tras subir el frontend)"
+  value       = module.cloudfront.distribution_id
+}
+
+output "frontend_bucket_name" {
+  description = "Nombre del bucket S3 del frontend"
+  value       = module.s3_frontend.bucket_name
+}
+
 output "api_gateway_url" {
   description = "URL base del API Gateway (backend)"
   value       = module.api_gateway.api_url

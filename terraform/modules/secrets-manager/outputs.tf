@@ -10,3 +10,7 @@ output "db_password" {
   value     = random_password.db.result
   sensitive = true
 }
+output "jwt_secret" {
+  value     = random_password.jwt.result
+  sensitive = true
+}
