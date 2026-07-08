@@ -15,12 +15,12 @@ resource "aws_s3_bucket" "logs" {
   #checkov:skip=CKV_AWS_18:Bucket de access logs de CloudFront — no se auto-loguea (dependencia circular)
   #checkov:skip=CKV_AWS_144:Bucket de logs — CRR no aplica a destinos de logging
   #checkov:skip=CKV2_AWS_62:Bucket de logs — notificaciones innecesarias en destino de logging
-  #checkov:skip=CKV2_AWS_65:CloudFront standard logging requiere ACL log-delivery-write — BucketOwnerPreferred obligatorio para este caso de uso
   bucket = "${var.resource_prefix}-cf-access-logs"
   tags   = var.common_tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "logs" {
+  #checkov:skip=CKV2_AWS_65:CloudFront standard logging exige ACL log-delivery-write en el bucket destino (requisito de AWS) — BucketOwnerEnforced rompería la entrega de logs del CDN
   bucket = aws_s3_bucket.logs.id
   rule { object_ownership = "BucketOwnerPreferred" }
 }
