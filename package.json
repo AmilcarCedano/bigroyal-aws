@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "BigRoyal - Infraestructura como Código en AWS",
   "scripts": {
-    "test": "jest --coverage",
+    "test": "jest --coverage --verbose",
     "prepare": "husky"
   },
   "devDependencies": {
