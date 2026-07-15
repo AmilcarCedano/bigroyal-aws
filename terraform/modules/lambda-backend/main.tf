@@ -127,6 +127,16 @@ data "archive_file" "placeholder" {
   }
 }
 
+# Log group explícito (en vez del auto-creado por Lambda): permite cifrado KMS,
+# retención controlada y — clave para observabilidad — ponerle metric filters
+# que convierten los logs de la aplicación en métricas de dashboard.
+resource "aws_cloudwatch_log_group" "backend" {
+  name              = "/aws/lambda/${var.function_name}"
+  retention_in_days = 365
+  kms_key_id        = var.kms_key_arn
+  tags              = var.common_tags
+}
+
 resource "aws_lambda_function" "this" {
   function_name                  = var.function_name
   role                           = aws_iam_role.lambda.arn
@@ -156,6 +166,9 @@ resource "aws_lambda_function" "this" {
       DB_SECRET_ARN = var.db_secret_arn
       REDIS_HOST    = var.redis_endpoint
       SNS_TOPIC_ARN = var.sns_topic_arn
+      DATABASE_URL  = var.database_url
+      JWT_SECRET    = var.jwt_secret
+      CORS_ORIGIN   = var.cors_origin
     }
   }
 
@@ -165,4 +178,16 @@ resource "aws_lambda_function" "this" {
   }
 
   tags = var.common_tags
+
+  # El código real se despliega fuera de Terraform (aws lambda update-function-code)
+  # porque Prisma + node_modules superan el límite de subida directa y requieren
+  # empaquetado específico para el runtime Linux de Lambda. Terraform solo gestiona
+  # la infraestructura del Lambda, no su código — evita pisar el deploy real con el placeholder.
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
+
+  # El log group debe existir ANTES de la primera invocación — si Lambda lo
+  # auto-crea primero, chocaría con el que gestiona Terraform.
+  depends_on = [aws_cloudwatch_log_group.backend]
 }

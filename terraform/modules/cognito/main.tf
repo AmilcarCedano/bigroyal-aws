@@ -18,6 +18,50 @@ resource "aws_cognito_user_pool" "this" {
     mutable             = true
   }
 
+  # Atributos custom que viajan en el ID token — el backend corre en VPC
+  # privada sin internet y no puede consultar Cognito ni depende de la BD
+  # para autorizar: rol, sede y el id del registro en la tabla usuarios
+  # se leen directo de los claims del token.
+  schema {
+    name                = "rol"
+    attribute_data_type = "String"
+    mutable             = true
+    string_attribute_constraints {
+      min_length = 1
+      max_length = 32
+    }
+  }
+
+  schema {
+    name                = "sede_id"
+    attribute_data_type = "String"
+    mutable             = true
+    string_attribute_constraints {
+      min_length = 1
+      max_length = 64
+    }
+  }
+
+  schema {
+    name                = "sede_nombre"
+    attribute_data_type = "String"
+    mutable             = true
+    string_attribute_constraints {
+      min_length = 1
+      max_length = 100
+    }
+  }
+
+  schema {
+    name                = "db_id"
+    attribute_data_type = "String"
+    mutable             = true
+    string_attribute_constraints {
+      min_length = 1
+      max_length = 64
+    }
+  }
+
   tags = var.common_tags
 }
 
