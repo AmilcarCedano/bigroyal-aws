@@ -5,7 +5,7 @@ variable "common_tags"     { type = map(string) }
 variable "function_name"   { type = string }
 variable "handler" {
   type    = string
-  default = "index.handler"
+  default = "src/handler.handler"
 }
 variable "runtime" {
   type    = string
@@ -26,3 +26,12 @@ variable "subnet_ids"     { type = list(string) }
 variable "vpc_id"         { type = string }
 variable "vpc_cidr"       { type = string }
 variable "kms_key_arn"    { type = string }
+variable "database_url" {
+  type      = string
+  sensitive = true
+}
+variable "jwt_secret" {
+  type      = string
+  sensitive = true
+}
+variable "cors_origin" { type = string }

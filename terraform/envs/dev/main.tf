@@ -177,6 +177,10 @@ module "lambda_backend" {
   vpc_id          = module.vpc.vpc_id
   vpc_cidr        = module.vpc.vpc_cidr_block
   kms_key_arn     = module.kms.key_arn
+
+  database_url = "postgresql://${var.db_master_username}:${module.secrets_manager.db_password}@${module.aurora.cluster_endpoint}:5432/${var.db_name}?schema=public"
+  jwt_secret   = module.secrets_manager.jwt_secret
+  cors_origin  = "https://${module.cloudfront.cdn_domain_name}"
 }
 
 module "lambda_kds_cocina" {
@@ -269,12 +273,15 @@ module "observabilidad" {
   alarm_email     = var.alarm_email
   kms_key_arn     = module.kms.key_arn
 
+  # Nombres estáticos (no via output de módulo) — for_each necesita
+  # conocer el set completo en plan-time, y un output de un recurso
+  # aún no creado es "known after apply", lo que rompe toset().
   lambda_function_names = [
-    module.lambda_backend.function_name,
-    module.lambda_kds_cocina.function_name,
-    module.lambda_workers.audit_function_name,
-    module.lambda_workers.alertas_ops_function_name,
-    module.lambda_workers.process_function_name,
+    "${var.resource_prefix}-backend",
+    "${var.resource_prefix}-kds-cocina",
+    "${var.resource_prefix}-lambda-audit",
+    "${var.resource_prefix}-lambda-alertas-ops",
+    "${var.resource_prefix}-lambda-process",
   ]
 
   api_gateway_api_id   = module.api_gateway.api_id

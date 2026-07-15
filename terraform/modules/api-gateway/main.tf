@@ -12,7 +12,18 @@ resource "aws_apigatewayv2_api" "this" {
   tags = var.common_tags
 }
 
-# Authorizer JWT con Cognito
+# Integración Lambda
+resource "aws_apigatewayv2_integration" "lambda" {
+  api_id                 = aws_apigatewayv2_api.this.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = var.lambda_arn
+  payload_format_version = "2.0"
+}
+
+# Authorizer JWT con Cognito — el frontend se autentica directo contra
+# Cognito (InitiateAuth desde el navegador) y envía el ID token como Bearer.
+# API Gateway verifica firma, emisor, audiencia y expiración ANTES de
+# invocar la Lambda; el backend solo lee los claims ya validados.
 resource "aws_apigatewayv2_authorizer" "cognito" {
   api_id           = aws_apigatewayv2_api.this.id
   authorizer_type  = "JWT"
@@ -25,33 +36,23 @@ resource "aws_apigatewayv2_authorizer" "cognito" {
   }
 }
 
-# Integración Lambda
-resource "aws_apigatewayv2_integration" "lambda" {
-  api_id                 = aws_apigatewayv2_api.this.id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = var.lambda_arn
-  payload_format_version = "2.0"
-}
-
-# Ruta pública intencional (health checks / recursos sin auth). El resto del API
-# va con JWT (ver route.protected). Se suprime CKV_AWS_309 solo en este recurso
-# para no desproteger las rutas autenticadas con un skip global.
-resource "aws_apigatewayv2_route" "public" {
-  #checkov:skip=CKV_AWS_309:Ruta pública por diseño; las rutas con datos van con authorizer JWT
-  api_id             = aws_apigatewayv2_api.this.id
-  route_key          = "ANY /public/{proxy+}"
-  target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
-  authorization_type = "NONE"
-}
-
-# Ruta protegida con JWT (todas las demás)
-# CORS preflight (OPTIONS) lo maneja el cors_configuration del API, no hace falta ruta explícita
-resource "aws_apigatewayv2_route" "protected" {
+# Todas las rutas de la API exigen un token válido de Cognito.
+resource "aws_apigatewayv2_route" "proxy" {
   api_id             = aws_apigatewayv2_api.this.id
   route_key          = "ANY /{proxy+}"
   target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+}
+
+# Preflight OPTIONS — el navegador nunca envía Authorization en el preflight,
+# así que esta ruta debe responder sin exigir JWT o el CORS muere antes de empezar.
+resource "aws_apigatewayv2_route" "options_preflight" {
+  #checkov:skip=CKV_AWS_309:Preflight CORS — solo responde headers, nunca ejecuta lógica de negocio
+  api_id             = aws_apigatewayv2_api.this.id
+  route_key          = "OPTIONS /{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+  authorization_type = "NONE"
 }
 
 # Log group para el access logging del API Gateway (cifrado KMS + retención 1 año)

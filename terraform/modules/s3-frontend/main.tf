@@ -5,8 +5,9 @@ resource "aws_s3_bucket" "access_logs" {
   #checkov:skip=CKV_AWS_18:Bucket de access logs — no se auto-loguea (dependencia circular)
   #checkov:skip=CKV_AWS_144:Bucket de logs — CRR no aplica a destinos de logging
   #checkov:skip=CKV2_AWS_62:Bucket de logs — notificaciones innecesarias en destino de logging
-  bucket = "${var.resource_prefix}-frontend-access-logs"
-  tags   = var.common_tags
+  bucket        = "${var.resource_prefix}-frontend-access-logs"
+  force_destroy = true # dev: S3 entrega access logs versionados que bloquean el destroy
+  tags          = var.common_tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "access_logs" {
@@ -52,9 +53,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
 resource "aws_s3_bucket" "replica" {
   #checkov:skip=CKV_AWS_18:Bucket réplica DR — no necesita access logging propio
   #checkov:skip=CKV2_AWS_62:Bucket réplica DR — notificaciones no aplican a destino de replicación
-  provider = aws.replica
-  bucket   = "${var.resource_prefix}-frontend-replica"
-  tags     = var.common_tags
+  provider      = aws.replica
+  bucket        = "${var.resource_prefix}-frontend-replica"
+  force_destroy = true # dev: la replicación deja versiones que bloquean el destroy
+  tags          = var.common_tags
 }
 
 resource "aws_s3_bucket_versioning" "replica" {

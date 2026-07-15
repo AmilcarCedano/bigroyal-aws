@@ -13,3 +13,6 @@ tfplan
 checkov_out.json
 checkov_out.txt
 terraform/results.xml/
+
+# Logs locales de apply/destroy
+*.log

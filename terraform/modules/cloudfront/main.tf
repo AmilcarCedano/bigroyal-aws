@@ -15,12 +15,13 @@ resource "aws_s3_bucket" "logs" {
   #checkov:skip=CKV_AWS_18:Bucket de access logs de CloudFront — no se auto-loguea (dependencia circular)
   #checkov:skip=CKV_AWS_144:Bucket de logs — CRR no aplica a destinos de logging
   #checkov:skip=CKV2_AWS_62:Bucket de logs — notificaciones innecesarias en destino de logging
-  #checkov:skip=CKV2_AWS_65:CloudFront standard logging requiere ACL log-delivery-write — BucketOwnerPreferred obligatorio para este caso de uso
-  bucket = "${var.resource_prefix}-cf-access-logs"
-  tags   = var.common_tags
+  bucket        = "${var.resource_prefix}-cf-access-logs"
+  force_destroy = true # dev: CloudFront entrega logs versionados que bloquean el destroy
+  tags          = var.common_tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "logs" {
+  #checkov:skip=CKV2_AWS_65:CloudFront standard logging exige ACL log-delivery-write en el bucket destino (requisito de AWS) — BucketOwnerEnforced rompería la entrega de logs del CDN
   bucket = aws_s3_bucket.logs.id
   rule { object_ownership = "BucketOwnerPreferred" }
 }
@@ -102,6 +103,11 @@ resource "aws_cloudfront_distribution" "this" {
   default_root_object = "index.html"
   price_class         = var.price_class
   web_acl_id          = var.web_acl_arn
+
+  # El logging_config solo referencia el bucket (no el ACL), así que Terraform
+  # no infiere la dependencia automáticamente — sin esto crea la distribución
+  # en paralelo con el ACL y CloudFront la rechaza (race condition).
+  depends_on = [aws_s3_bucket_acl.logs]
 
   logging_config {
     include_cookies = false

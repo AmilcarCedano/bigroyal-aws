@@ -1,0 +1,241 @@
+---
+- name: Deploy del backend a Lambda + migración y seed de la base de datos
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: [backend]
+
+  vars:
+    aws_region: us-east-1
+    backend_dir: "{{ playbook_dir }}/../../backend"
+    terraform_dir: "{{ playbook_dir }}/../terraform/envs/dev"
+    staging_dir: "/tmp/lambda-backend-package"
+    zip_path: "/tmp/lambda-backend.zip"
+
+  tasks:
+    - name: Instalar dependencias del backend (incluye devDependencies — se necesita el CLI de prisma)
+      command: npm install
+      args:
+        chdir: "{{ backend_dir }}"
+
+    - name: Generar Prisma Client con motor Linux (rhel-openssl-3.0.x)
+      command: npx prisma generate
+      args:
+        chdir: "{{ backend_dir }}"
+
+    - name: Generar SQL de migración desde el schema (sin schema-engine Linux disponible, se ejecuta como raw SQL)
+      shell: npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/migration.sql
+      args:
+        chdir: "{{ backend_dir }}"
+        executable: /bin/bash
+
+    - name: Preparar carpeta de staging del paquete Lambda
+      file:
+        path: "{{ staging_dir }}"
+        state: "{{ item }}"
+      loop: [absent, directory]
+
+    - name: Copiar archivos del backend al staging
+      copy:
+        src: "{{ backend_dir }}/{{ item }}"
+        dest: "{{ staging_dir }}/"
+        remote_src: true
+      loop: [src, prisma, seed.js, package.json, node_modules]
+
+    - name: Quitar motor de Prisma de Windows del paquete (Lambda es Linux)
+      file:
+        path: "{{ staging_dir }}/node_modules/.prisma/client/query_engine-windows.dll.node"
+        state: absent
+
+    - name: Comprimir el paquete
+      archive:
+        path: "{{ staging_dir }}/*"
+        dest: "{{ zip_path }}"
+        format: zip
+
+    - name: Obtener bucket S3 del frontend (se reusa como staging de deploy)
+      # Lee el state JSON directo con jq — evita depender de "terraform output",
+      # que requiere providers instalados para la plataforma que ejecuta el comando
+      # (Windows vs Linux/WSL) y rompería el "terraform apply" hecho desde PowerShell.
+      command: jq -r '.outputs.frontend_bucket_name.value' terraform.tfstate
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: bucket_result
+
+    - name: Subir paquete a S3
+      command: aws s3 cp {{ zip_path }} s3://{{ bucket_result.stdout }}/_deploy/lambda-backend.zip --region {{ aws_region }}
+
+    - name: Desplegar código al Lambda
+      command: >
+        aws lambda update-function-code
+        --function-name bigroyal-dev-backend
+        --s3-bucket {{ bucket_result.stdout }}
+        --s3-key _deploy/lambda-backend.zip
+        --region {{ aws_region }}
+
+    - name: Esperar a que el update de código termine
+      command: aws lambda wait function-updated --function-name bigroyal-dev-backend --region {{ aws_region }}
+
+    - name: Cambiar handler temporalmente a modo migración
+      command: aws lambda update-function-configuration --function-name bigroyal-dev-backend --handler src/migrate.handler --region {{ aws_region }}
+
+    - name: Esperar a que el cambio de handler termine
+      command: aws lambda wait function-updated --function-name bigroyal-dev-backend --region {{ aws_region }}
+
+    - name: Ejecutar migración + seed
+      command: aws lambda invoke --function-name bigroyal-dev-backend --region {{ aws_region }} --cli-read-timeout 120 /tmp/migrate-output.json
+      register: migrate_invoke
+
+    - name: Leer resultado de la migración
+      slurp:
+        src: /tmp/migrate-output.json
+      register: migrate_output_raw
+
+    - name: Mostrar resultado de la migración
+      debug:
+        msg: "{{ migrate_output_raw.content | b64decode }}"
+
+    - name: Revertir handler al modo producción (HTTP)
+      command: aws lambda update-function-configuration --function-name bigroyal-dev-backend --handler src/handler.handler --region {{ aws_region }}
+
+    - name: Esperar a que el handler quede en modo producción
+      command: aws lambda wait function-updated --function-name bigroyal-dev-backend --region {{ aws_region }}
+
+- name: Crear usuarios en Cognito (login del frontend va directo a Cognito)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: [cognito]
+
+  vars:
+    aws_region: us-east-1
+    terraform_dir: "{{ playbook_dir }}/../terraform/envs/dev"
+    sede_id: "11111111-1111-1111-1111-111111111111"
+    sede_nombre: "Sede Centro"
+    usuarios:
+      - { email: admin@bigroyal.com,  password: Admin123,  nombre: Administrador,   rol: admin,     db_id: aaaaaaaa-0000-0000-0000-000000000001 }
+      - { email: cajero@bigroyal.com, password: Cajero123, nombre: Carlos Cajero,   rol: cajero,    db_id: aaaaaaaa-0000-0000-0000-000000000002 }
+      - { email: cocina@bigroyal.com, password: Cocina123, nombre: Luis Cocinero,   rol: planchero, db_id: aaaaaaaa-0000-0000-0000-000000000003 }
+
+  tasks:
+    - name: Obtener User Pool ID desde el state
+      command: jq -r '.outputs.cognito_user_pool_id.value' terraform.tfstate
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: pool_id_result
+
+    - name: Crear usuarios (ignora si ya existen)
+      command: >
+        aws cognito-idp admin-create-user
+        --user-pool-id {{ pool_id_result.stdout }}
+        --username {{ item.email }}
+        --user-attributes
+        Name=email,Value={{ item.email }}
+        Name=email_verified,Value=true
+        "Name=name,Value={{ item.nombre }}"
+        Name=custom:rol,Value={{ item.rol }}
+        Name=custom:db_id,Value={{ item.db_id }}
+        Name=custom:sede_id,Value={{ sede_id }}
+        "Name=custom:sede_nombre,Value={{ sede_nombre }}"
+        --message-action SUPPRESS
+        --region {{ aws_region }}
+      loop: "{{ usuarios }}"
+      register: create_result
+      failed_when:
+        - create_result.rc != 0
+        - "'UsernameExistsException' not in create_result.stderr"
+
+    - name: Establecer contraseñas permanentes
+      command: >
+        aws cognito-idp admin-set-user-password
+        --user-pool-id {{ pool_id_result.stdout }}
+        --username {{ item.email }}
+        --password {{ item.password }}
+        --permanent
+        --region {{ aws_region }}
+      loop: "{{ usuarios }}"
+
+- name: Deploy del frontend a S3 + invalidación CloudFront
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: [frontend]
+
+  vars:
+    aws_region: us-east-1
+    frontend_dir: "{{ playbook_dir }}/../../frontend"
+    terraform_dir: "{{ playbook_dir }}/../terraform/envs/dev"
+
+  tasks:
+    - name: Instalar dependencias del frontend
+      command: npm install
+      args:
+        chdir: "{{ frontend_dir }}"
+
+    - name: Obtener URL del API Gateway desde el state
+      command: jq -r '.outputs.api_gateway_url.value' terraform.tfstate
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: api_url_result
+
+    - name: Actualizar VITE_API_URL en .env con la URL actual del API Gateway
+      lineinfile:
+        path: "{{ frontend_dir }}/.env"
+        regexp: "^VITE_API_URL="
+        line: "VITE_API_URL={{ api_url_result.stdout | regex_replace('/$', '') }}/api"
+
+    - name: Obtener Client ID de Cognito desde el state
+      command: jq -r '.outputs.cognito_app_client_id.value' terraform.tfstate
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: client_id_result
+
+    - name: Actualizar VITE_COGNITO_CLIENT_ID en .env
+      lineinfile:
+        path: "{{ frontend_dir }}/.env"
+        regexp: "^VITE_COGNITO_CLIENT_ID="
+        line: "VITE_COGNITO_CLIENT_ID={{ client_id_result.stdout }}"
+
+    - name: Vaciar VITE_SOCKET_URL (Lambda no soporta WebSockets — evita errores de consola)
+      lineinfile:
+        path: "{{ frontend_dir }}/.env"
+        regexp: "^VITE_SOCKET_URL="
+        line: "VITE_SOCKET_URL="
+
+    - name: Build del frontend (vite build)
+      command: npm run build
+      args:
+        chdir: "{{ frontend_dir }}"
+
+    - name: Obtener nombre del bucket S3 desde el state
+      command: jq -r '.outputs.frontend_bucket_name.value' terraform.tfstate
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: bucket_result
+
+    - name: Obtener CloudFront distribution ID desde el state
+      command: jq -r '.outputs.cloudfront_distribution_id.value' terraform.tfstate
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: distribution_result
+
+    - name: Subir build a S3 (sync)
+      command: >
+        aws s3 sync dist/ s3://{{ bucket_result.stdout }}
+        --delete
+        --region {{ aws_region }}
+      args:
+        chdir: "{{ frontend_dir }}"
+
+    - name: Invalidar caché de CloudFront
+      command: >
+        aws cloudfront create-invalidation
+        --distribution-id {{ distribution_result.stdout }}
+        --paths "/*"
+
+    - name: Resultado del deploy
+      debug:
+        msg: |
+          Deploy completo.
+          Login (Cognito): admin@bigroyal.com / Admin123
+          Otros: cajero@bigroyal.com / Cajero123 — cocina@bigroyal.com / Cocina123

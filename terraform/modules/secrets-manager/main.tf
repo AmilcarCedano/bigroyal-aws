@@ -13,6 +13,11 @@ resource "aws_secretsmanager_secret" "db" {
   description = "Credenciales Aurora PostgreSQL — rotación automática cada 30 días"
   kms_key_id  = var.kms_key_arn
   tags        = var.common_tags
+
+  # Sin ventana de recuperación en dev: el destroy borra el secret al instante.
+  # Con la ventana por defecto (30 días) el nombre queda reservado y el
+  # siguiente apply falla con "already scheduled for deletion".
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "db" {
@@ -36,6 +41,8 @@ resource "aws_secretsmanager_secret" "jwt" {
   description = "Clave secreta JWT — rotación automática cada 30 días"
   kms_key_id  = var.kms_key_arn
   tags        = var.common_tags
+
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "jwt" {
