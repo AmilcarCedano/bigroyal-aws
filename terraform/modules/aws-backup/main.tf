@@ -39,9 +39,20 @@ resource "aws_backup_plan" "aurora" {
     # Backup continuo (Point-in-Time Recovery) — RPO de 5 minutos
     enable_continuous_backup = true
 
+    # Valores explícitos idénticos a los que AWS asigna por defecto —
+    # si se omiten, la API los completa y cada plan re-declara la regla
+    # entera (drift perpetuo: el apply nunca converge a "No changes").
+    schedule                     = "cron(0 5 ? * * *)"
+    schedule_expression_timezone = "Etc/UTC"
+    start_window                 = 60
+    completion_window            = 180
+    recovery_point_tags          = {}
+
     # Retención de 7 días
     lifecycle {
-      delete_after = 7
+      delete_after                              = 7
+      cold_storage_after                        = 0
+      opt_in_to_archive_for_supported_resources = false
     }
   }
 
