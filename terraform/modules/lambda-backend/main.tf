@@ -127,6 +127,16 @@ data "archive_file" "placeholder" {
   }
 }
 
+# Log group explícito (en vez del auto-creado por Lambda): permite cifrado KMS,
+# retención controlada y — clave para observabilidad — ponerle metric filters
+# que convierten los logs de la aplicación en métricas de dashboard.
+resource "aws_cloudwatch_log_group" "backend" {
+  name              = "/aws/lambda/${var.function_name}"
+  retention_in_days = 365
+  kms_key_id        = var.kms_key_arn
+  tags              = var.common_tags
+}
+
 resource "aws_lambda_function" "this" {
   function_name                  = var.function_name
   role                           = aws_iam_role.lambda.arn
@@ -176,4 +186,8 @@ resource "aws_lambda_function" "this" {
   lifecycle {
     ignore_changes = [filename, source_code_hash]
   }
+
+  # El log group debe existir ANTES de la primera invocación — si Lambda lo
+  # auto-crea primero, chocaría con el que gestiona Terraform.
+  depends_on = [aws_cloudwatch_log_group.backend]
 }

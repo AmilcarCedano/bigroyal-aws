@@ -287,4 +287,11 @@ module "observabilidad" {
   api_gateway_api_id   = module.api_gateway.api_id
   enable_api_5xx_alarm = true
   aws_region           = var.aws_region
+
+  # Indicadores basados en LOGS: los dashboards les ponen metric filters
+  # y consultas de Logs Insights encima.
+  backend_log_group_name     = module.lambda_backend.log_group_name
+  api_access_log_group_name  = module.api_gateway.access_log_group_name
+  waf_log_group_name         = module.waf.log_group_name
+  cloudfront_distribution_id = module.cloudfront.distribution_id
 }

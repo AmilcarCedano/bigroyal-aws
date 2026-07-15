@@ -1,31 +1,34 @@
-const users = [
-  { id: 1, name: 'Anderson Cedano', role: 'admin' },
-  { id: 2, name: 'Leonardo Chavez', role: 'developer' },
-  { id: 3, name: 'Sergio Coronado', role: 'developer' },
-];
+// Lógica de negocio de gestión de usuarios de BigRoyal.
+// Valida datos de entrada y delega la persistencia en usersRepository
+// (en AWS: Prisma → Aurora). Nunca expone el password_hash hacia afuera.
+const repo = require('./usersRepository');
 
-function getUsers() {
-  return users;
-}
+const ROLES_VALIDOS = ['admin', 'cajero', 'planchero'];
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function getUserById(id) {
-  return users.find((u) => u.id === id) || null;
-}
+function crearUsuario(datos) {
+  const { nombre, email, rol } = datos;
 
-function createUser(user) {
-  if (!user.name || !user.role) {
-    throw new Error('El usuario debe tener nombre y rol');
+  if (!nombre || !email || !rol) {
+    throw new Error('El usuario debe tener nombre, email y rol');
   }
-  const newUser = { id: users.length + 1, ...user };
-  users.push(newUser);
-  return newUser;
+  if (!EMAIL_REGEX.test(email)) {
+    throw new Error('El email no tiene un formato válido');
+  }
+  if (!ROLES_VALIDOS.includes(rol)) {
+    throw new Error(`Rol inválido: debe ser uno de ${ROLES_VALIDOS.join(', ')}`);
+  }
+  if (repo.buscarPorEmail(email)) {
+    throw new Error('El email ya está registrado');
+  }
+
+  const creado = repo.guardar(datos);
+  const { password_hash: _omitido, ...sinPassword } = creado;
+  return sinPassword;
 }
 
-function deleteUser(id) {
-  const index = users.findIndex((u) => u.id === id);
-  if (index === -1) return false;
-  users.splice(index, 1);
-  return true;
+function listarUsuarios() {
+  return repo.listar().map(({ password_hash: _omitido, ...usuario }) => usuario);
 }
 
-module.exports = { getUsers, getUserById, createUser, deleteUser };
+module.exports = { crearUsuario, listarUsuarios };

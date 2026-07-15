@@ -1,45 +1,70 @@
-const { getUsers, getUserById, createUser, deleteUser } = require('./usersController');
+// Suite 1 — Gestión de usuarios (casos 1-5 del plan, ver docs/PLAN-TESTS.md)
+// La capa de datos (usersRepository) se reemplaza con jest.mock: los tests
+// verifican la lógica de negocio Y las interacciones con el repositorio.
+jest.mock('./usersRepository');
+
+const repo = require('./usersRepository');
+const { crearUsuario, listarUsuarios } = require('./usersController');
 
 describe('usersController', () => {
+  beforeEach(() => jest.resetAllMocks());
 
-  test('retorna todos los usuarios', () => {
-    const result = getUsers();
-    expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(0);
+  test('caso 1: crea un usuario válido y lo guarda en el repositorio', () => {
+    // Arrange
+    const datos = { nombre: 'Carlos Cajero', email: 'carlos@bigroyal.com', rol: 'cajero', password_hash: 'hash' };
+    repo.buscarPorEmail.mockReturnValue(null);
+    repo.guardar.mockReturnValue({ id: '1', ...datos });
+
+    // Act
+    const creado = crearUsuario(datos);
+
+    // Assert
+    expect(creado.id).toBe('1');
+    expect(creado.email).toBe('carlos@bigroyal.com');
+    expect(repo.guardar).toHaveBeenCalledWith(datos);
   });
 
-  test('retorna un usuario por id existente', () => {
-    const user = getUserById(1);
-    expect(user).not.toBeNull();
-    expect(user.id).toBe(1);
-    expect(user.name).toBe('Anderson Cedano');
+  test('caso 2: rechaza email duplicado y NO llama a guardar', () => {
+    // Arrange
+    repo.buscarPorEmail.mockReturnValue({ id: '9', email: 'carlos@bigroyal.com' });
+
+    // Act + Assert
+    expect(() =>
+      crearUsuario({ nombre: 'Otro', email: 'carlos@bigroyal.com', rol: 'cajero' })
+    ).toThrow('El email ya está registrado');
+    expect(repo.guardar).not.toHaveBeenCalled();
   });
 
-  test('retorna null para un id inexistente', () => {
-    const user = getUserById(999);
-    expect(user).toBeNull();
+  test('caso 3: rechaza email con formato inválido', () => {
+    // Arrange
+    const datos = { nombre: 'Ana', email: 'no-es-un-email', rol: 'admin' };
+
+    // Act + Assert
+    expect(() => crearUsuario(datos)).toThrow('El email no tiene un formato válido');
   });
 
-  test('crea un nuevo usuario correctamente', () => {
-    const newUser = createUser({ name: 'Carlos Lopez', role: 'viewer' });
-    expect(newUser.id).toBeDefined();
-    expect(newUser.name).toBe('Carlos Lopez');
-    expect(newUser.role).toBe('viewer');
+  test('caso 4: rechaza un rol que no existe en el sistema', () => {
+    // Arrange
+    const datos = { nombre: 'Ana', email: 'ana@bigroyal.com', rol: 'gerente' };
+
+    // Act + Assert
+    expect(() => crearUsuario(datos)).toThrow('Rol inválido');
   });
 
-  test('lanza error si falta nombre o rol al crear usuario', () => {
-    expect(() => createUser({ name: 'Solo nombre' })).toThrow('El usuario debe tener nombre y rol');
-    expect(() => createUser({ role: 'admin' })).toThrow('El usuario debe tener nombre y rol');
-  });
+  test('caso 5: listar usuarios nunca expone el password_hash', () => {
+    // Arrange
+    repo.listar.mockReturnValue([
+      { id: '1', nombre: 'Admin', email: 'a@b.com', rol: 'admin', password_hash: 'secreto1' },
+      { id: '2', nombre: 'Cajero', email: 'c@b.com', rol: 'cajero', password_hash: 'secreto2' },
+    ]);
 
-  test('elimina un usuario existente', () => {
-    const result = deleteUser(1);
-    expect(result).toBe(true);
-  });
+    // Act
+    const lista = listarUsuarios();
 
-  test('retorna false al eliminar un usuario inexistente', () => {
-    const result = deleteUser(999);
-    expect(result).toBe(false);
+    // Assert
+    expect(lista).toHaveLength(2);
+    for (const u of lista) {
+      expect(u.password_hash).toBeUndefined();
+    }
   });
-
 });

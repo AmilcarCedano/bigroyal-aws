@@ -42,10 +42,16 @@
         remote_src: true
       loop: [src, prisma, seed.js, package.json, node_modules]
 
-    - name: Quitar motor de Prisma de Windows del paquete (Lambda es Linux)
-      file:
-        path: "{{ staging_dir }}/node_modules/.prisma/client/query_engine-windows.dll.node"
-        state: absent
+    - name: Quitar binarios innecesarios (motores de otras plataformas y CLI de prisma — Lambda solo usa el motor rhel)
+      shell: |
+        rm -f {{ staging_dir }}/node_modules/.prisma/client/query_engine-windows.dll.node
+        rm -f {{ staging_dir }}/node_modules/.prisma/client/libquery_engine-debian*
+        rm -rf {{ staging_dir }}/node_modules/@prisma/engines
+        rm -rf {{ staging_dir }}/node_modules/prisma
+        rm -f {{ staging_dir }}/node_modules/.bin/prisma*
+        rm -rf {{ staging_dir }}/node_modules/.cache
+      args:
+        executable: /bin/bash
 
     - name: Comprimir el paquete
       archive:

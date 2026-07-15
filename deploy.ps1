@@ -35,7 +35,14 @@ Copy-Item "$backendDir\prisma" "$staging\prisma" -Recurse
 Copy-Item "$backendDir\seed.js" "$staging\seed.js"
 Copy-Item "$backendDir\package.json" "$staging\package.json"
 Copy-Item "$backendDir\node_modules" "$staging\node_modules" -Recurse
+# Solo se necesita el motor rhel (el que usa Lambda) - quitar el resto mantiene
+# el paquete bajo el limite de 250MB descomprimido de Lambda
 Remove-Item "$staging\node_modules\.prisma\client\query_engine-windows.dll.node" -Force -ErrorAction SilentlyContinue
+Get-ChildItem "$staging\node_modules\.prisma\client" -Filter "libquery_engine-debian*" -ErrorAction SilentlyContinue | Remove-Item -Force
+Remove-Item "$staging\node_modules\@prisma\engines" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "$staging\node_modules\prisma" -Recurse -Force -ErrorAction SilentlyContinue
+Get-ChildItem "$staging\node_modules\.bin" -Filter "prisma*" -ErrorAction SilentlyContinue | Remove-Item -Force
+Remove-Item "$staging\node_modules\.cache" -Recurse -Force -ErrorAction SilentlyContinue
 
 $zipPath = "$scratch\lambda-backend.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
