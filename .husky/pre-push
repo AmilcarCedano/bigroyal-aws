@@ -1,0 +1,3 @@
+# Git hook pre-push (Husky): corre los 15 tests unitarios ANTES de que el
+# codigo salga de la maquina — si fallan, el push se bloquea localmente.
+npm test
