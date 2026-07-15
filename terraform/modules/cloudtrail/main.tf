@@ -103,10 +103,20 @@ resource "aws_cloudtrail" "main" {
   is_multi_region_trail         = true
   enable_log_file_validation    = true
   kms_key_id                    = var.kms_key_arn
-  sns_topic_name                = aws_sns_topic.trail_alerts.arn
+  # .name (no .arn): la API guarda el nombre y devolverlo distinto al config
+  # generaba un drift perpetuo nombre→ARN en cada plan.
+  sns_topic_name                = aws_sns_topic.trail_alerts.name
 
   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.trail.arn}:*"
   cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_cw.arn
+
+  # CloudTrail valida al crearse que la política del topic (y la del bucket)
+  # ya le permitan publicar/escribir. Son recursos separados que Terraform
+  # crearía en paralelo sin estas dependencias explícitas (race condition).
+  depends_on = [
+    aws_sns_topic_policy.trail_alerts,
+    aws_s3_bucket_policy.trail,
+  ]
 
   tags = var.common_tags
 }
