@@ -182,6 +182,13 @@ resource "aws_cloudfront_distribution" "this" {
     minimum_protocol_version       = var.acm_certificate_arn != null ? "TLSv1.2_2021" : "TLSv1.2_2021"
   }
 
+  # Con el certificado por defecto, la API de CloudFront fuerza el protocolo
+  # mínimo a TLSv1 e ignora el valor declarado — sin este ignore, cada plan
+  # re-declara TLSv1.2_2021 en un drift perpetuo que nunca converge.
+  lifecycle {
+    ignore_changes = [viewer_certificate]
+  }
+
   tags = var.common_tags
 }
 
