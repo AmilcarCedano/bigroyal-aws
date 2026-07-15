@@ -14,3 +14,7 @@ variable "enable_api_5xx_alarm" {
   type    = bool
   default = true
 }
+variable "backend_log_group_name"    { type = string }
+variable "api_access_log_group_name" { type = string }
+variable "waf_log_group_name"        { type = string }
+variable "cloudfront_distribution_id" { type = string }
